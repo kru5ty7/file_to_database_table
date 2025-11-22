@@ -38,7 +38,30 @@ This tool allows you to convert a CSV or Excel file into a database table in MS 
     cp config.json.template config.json
     ```
 
-    Edit `config.json`:
+    Edit `config.json` (supports multiple connections):
+    ```json
+    {
+        "default_connection": "production",
+        "connections": {
+            "production": {
+                "server": "your_server_name",
+                "database": "your_database_name",
+                "username": "your_username",
+                "password": "your_password",
+                "driver": "{ODBC Driver 17 for SQL Server}"
+            },
+            "development": {
+                "server": "dev_server_name",
+                "database": "dev_database_name",
+                "username": "dev_username",
+                "password": "dev_password",
+                "driver": "{ODBC Driver 17 for SQL Server}"
+            }
+        }
+    }
+    ```
+
+    **Legacy single-connection format is also supported:**
     ```json
     {
         "server": "your_server_name",
@@ -96,17 +119,59 @@ This tool allows you to convert a CSV or Excel file into a database table in MS 
 
 ## Usage
 
-### With uv:
+### Option 1: GUI (Graphical User Interface)
+
+The GUI provides a modern, user-friendly interface for converting files to database tables.
+
+**With uv:**
+```bash
+uv run python gui.py
+```
+
+**With traditional Python:**
+```bash
+python gui.py
+```
+
+**Features:**
+- File browser for easy file selection
+- **Multiple database connection support** - switch between different environments (production, development, test)
+- Database connection testing
+- Real-time progress tracking
+- Live log output
+- Support for CSV and Excel files (single or multiple sheets)
+
+### Option 2: Command Line Interface
+
+**With uv:**
 ```bash
 uv run python main.py
 ```
 
-### With traditional Python:
+**With traditional Python:**
 ```bash
 python main.py
 ```
 
-2.  **Enter the file path:**
-    When prompted, enter the full path to your CSV or Excel file.
+When prompted, enter the full path to your CSV or Excel file. The script will create tables in your database with sanitized names and insert all data.
 
-The script will then create a table in your database with the same name as the file (without the extension) and insert the data from the file into the table.
+## Features
+
+- **Multi-sheet Excel support**: Automatically processes all sheets in an Excel workbook
+- **Data type inference**: Intelligently detects numeric vs text columns
+- **Leading zero preservation**: Values like "020435" are preserved as strings
+- **Name sanitization**: Table and column names are sanitized for SQL compatibility
+- **Comprehensive logging**: Detailed logs saved to `logs/` directory
+- **Progress tracking**: Real-time progress updates during conversion
+- **Error handling**: Detailed error messages and full tracebacks
+- **Password encryption**: Database passwords are encrypted using Fernet symmetric encryption before being stored in config.json
+
+## Security
+
+Passwords in `config.json` are automatically encrypted using Fernet symmetric encryption (from the `cryptography` library). The encryption key is stored in `.encryption_key` file in the project directory.
+
+**Important security notes:**
+- Keep `.encryption_key` file secure and never commit it to version control
+- The `.gitignore` file is configured to exclude both `.encryption_key` and `config.json`
+- If you lose the `.encryption_key` file, you'll need to re-enter all passwords
+- For production use, consider additional security measures like environment variables or a secrets manager

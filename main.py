@@ -7,6 +7,8 @@ import re
 import traceback
 import logging
 from datetime import datetime
+from cryptography.fernet import Fernet
+import base64
 
 # Configure logging
 def setup_logging():
@@ -45,6 +47,44 @@ def setup_logging():
 
 logger = setup_logging()
 
+# Encryption key management
+def get_or_create_key():
+    """Get or create encryption key for password storage"""
+    key_file = '.encryption_key'
+    if os.path.exists(key_file):
+        with open(key_file, 'rb') as f:
+            key = f.read()
+    else:
+        key = Fernet.generate_key()
+        with open(key_file, 'wb') as f:
+            f.write(key)
+        logger.info("Generated new encryption key")
+    return key
+
+def encrypt_password(password):
+    """Encrypt password using Fernet symmetric encryption"""
+    if not password:
+        return ""
+    key = get_or_create_key()
+    f = Fernet(key)
+    encrypted = f.encrypt(password.encode())
+    return base64.urlsafe_b64encode(encrypted).decode()
+
+def decrypt_password(encrypted_password):
+    """Decrypt password using Fernet symmetric encryption"""
+    if not encrypted_password:
+        return ""
+    try:
+        key = get_or_create_key()
+        f = Fernet(key)
+        decoded = base64.urlsafe_b64decode(encrypted_password.encode())
+        decrypted = f.decrypt(decoded)
+        return decrypted.decode()
+    except Exception as e:
+        logger.error(f"Failed to decrypt password: {e}")
+        # If decryption fails, assume it's plain text (backward compatibility)
+        return encrypted_password
+
 def sanitize_name(name):
     """
     Sanitize table and column names:
@@ -75,20 +115,39 @@ def sanitize_name(name):
 
     return name
 
-def get_db_connection():
+def get_db_connection(connection_name=None):
     logger.info("Connecting to database...")
     try:
         with open('config.json') as config_file:
             config = json.load(config_file)
 
-        logger.debug(f"Database server: {config['server']}, Database: {config['database']}")
+        # Support both old and new config formats
+        if 'connections' in config:
+            # New format with multiple connections
+            if connection_name is None:
+                connection_name = config.get('default_connection', list(config['connections'].keys())[0])
+
+            if connection_name not in config['connections']:
+                raise ValueError(f"Connection '{connection_name}' not found in config.json")
+
+            db_config = config['connections'][connection_name]
+            logger.info(f"Using connection: {connection_name}")
+        else:
+            # Old format with single connection
+            db_config = config
+            logger.debug("Using legacy config format (single connection)")
+
+        logger.debug(f"Database server: {db_config['server']}, Database: {db_config['database']}")
+
+        # Decrypt password if encrypted
+        password = decrypt_password(db_config.get("password", ""))
 
         conn_str = (
-            f'DRIVER={config["driver"]};'
-            f'SERVER={config["server"]};'
-            f'DATABASE={config["database"]};'
-            f'UID={config["username"]};'
-            f'PWD={config["password"]};'
+            f'DRIVER={db_config["driver"]};'
+            f'SERVER={db_config["server"]};'
+            f'DATABASE={db_config["database"]};'
+            f'UID={db_config["username"]};'
+            f'PWD={password};'
         )
         conn = pyodbc.connect(conn_str)
         logger.info("Database connection established successfully")
@@ -99,6 +158,19 @@ def get_db_connection():
     except Exception as e:
         logger.error(f"Failed to connect to database: {e}")
         raise
+
+def get_available_connections():
+    """Get list of available connection names from config"""
+    try:
+        with open('config.json') as config_file:
+            config = json.load(config_file)
+
+        if 'connections' in config:
+            return list(config['connections'].keys())
+        else:
+            return ['default']
+    except FileNotFoundError:
+        return []
 
 def get_dataframes(file_path):
     """
