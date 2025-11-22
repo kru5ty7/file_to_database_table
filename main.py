@@ -273,22 +273,52 @@ def infer_column_type(series, column_name):
             logger.debug(f"Column '{column_name}': Error analyzing numeric range, using NVARCHAR(MAX)")
             return "NVARCHAR(MAX)"
 
-def create_table_from_dataframe(df, table_name, cursor):
+def create_table_from_dataframe(df, table_name, cursor, column_name_map=None, column_type_map=None):
+    """
+    Create table from dataframe with optional column name and type overrides.
+
+    Args:
+        df: DataFrame to create table from
+        table_name: Name of the table to create
+        cursor: Database cursor
+        column_name_map: Dict mapping original column names to new names (optional)
+        column_type_map: Dict mapping column names to SQL types (optional)
+    """
     logger.info(f"Creating table: {table_name}")
 
     # Drop table if it exists
     logger.debug(f"Checking if table '{table_name}' already exists")
     cursor.execute(f"IF OBJECT_ID('{table_name}', 'U') IS NOT NULL DROP TABLE {table_name}")
 
+    # Initialize override maps if not provided
+    if column_name_map is None:
+        column_name_map = {}
+    if column_type_map is None:
+        column_type_map = {}
+
     # Analyze each column to determine the best type
     logger.info("Analyzing column types...")
     sql_columns = []
     column_types = {}
+    final_column_names = {}  # Map original to final column names
 
     for column_name in df.columns:
-        col_type = infer_column_type(df[column_name], column_name)
+        # Get final column name (use override if provided, otherwise use original)
+        final_col_name = column_name_map.get(column_name, column_name)
+        final_column_names[column_name] = final_col_name
+
+        # Get column type (use override if provided, otherwise infer)
+        if column_name in column_type_map:
+            col_type = column_type_map[column_name]
+            logger.debug(f"Using overridden type for '{column_name}': {col_type}")
+        else:
+            col_type = infer_column_type(df[column_name], column_name)
+
         column_types[column_name] = col_type
-        sql_columns.append(f"[{column_name}] {col_type}")
+        sql_columns.append(f"[{final_col_name}] {col_type}")
+
+        if final_col_name != column_name:
+            logger.info(f"Column renamed: '{column_name}' -> '{final_col_name}'")
 
     create_table_sql = f"CREATE TABLE {table_name} ({', '.join(sql_columns)})"
     logger.info(f"Table schema: {create_table_sql}")
