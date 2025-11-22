@@ -79,29 +79,85 @@ def get_dataframes(file_path):
 
     return dataframes
 
+def infer_column_type(series):
+    """
+    Infer the best SQL column type for a series by analyzing its values.
+    Returns the SQL type as a string.
+    """
+    # Remove NA values for analysis
+    non_null = series.dropna()
+
+    if len(non_null) == 0:
+        return "NVARCHAR(MAX)"
+
+    # Check if all values are numeric (and don't have leading zeros)
+    all_numeric = True
+    has_decimals = False
+    has_leading_zeros = False
+
+    for val in non_null:
+        val_str = str(val).strip()
+
+        # Check for leading zeros (except single "0")
+        if val_str.startswith('0') and len(val_str) > 1 and val_str[1].isdigit():
+            has_leading_zeros = True
+            all_numeric = False
+            break
+
+        # Try to convert to number
+        try:
+            float(val_str)
+            if '.' in val_str or 'e' in val_str.lower() or 'E' in val_str:
+                has_decimals = True
+        except (ValueError, TypeError):
+            all_numeric = False
+            break
+
+    # Determine the appropriate type
+    if has_leading_zeros or not all_numeric:
+        return "NVARCHAR(MAX)"
+    elif has_decimals:
+        return "FLOAT"
+    else:
+        # Check if values fit in BIGINT range
+        try:
+            max_val = max(int(float(str(v))) for v in non_null)
+            min_val = min(int(float(str(v))) for v in non_null)
+            if -9223372036854775808 <= min_val and max_val <= 9223372036854775807:
+                return "BIGINT"
+            else:
+                return "NVARCHAR(MAX)"
+        except:
+            return "NVARCHAR(MAX)"
+
 def create_table_from_dataframe(df, table_name, cursor):
     # Drop table if it exists
     cursor.execute(f"IF OBJECT_ID('{table_name}', 'U') IS NOT NULL DROP TABLE {table_name}")
 
-    # Create table - using NVARCHAR(MAX) for all columns to preserve data integrity
-    # This prevents data loss from type conversion (e.g., leading zeros, date formats, etc.)
+    # Analyze each column to determine the best type
     sql_columns = []
+    column_types = {}
+
     for column_name in df.columns:
-        sql_columns.append(f"[{column_name}] NVARCHAR(MAX)")
+        col_type = infer_column_type(df[column_name])
+        column_types[column_name] = col_type
+        sql_columns.append(f"[{column_name}] {col_type}")
 
     create_table_sql = f"CREATE TABLE {table_name} ({', '.join(sql_columns)})"
     print(create_table_sql)
     cursor.execute(create_table_sql)
 
-    # Insert data
+    # Insert data with proper type handling
     for _, row in df.iterrows():
         values = []
-        for v in row.values:
+        for col_name, v in zip(df.columns, row.values):
             if pd.isna(v):
                 values.append("NULL")
-            elif isinstance(v, str):
-                values.append(f"'{v.replace("'", "''")}'")
+            elif column_types[col_name] in ["BIGINT", "FLOAT"]:
+                # Insert numeric values without quotes
+                values.append(str(v))
             else:
+                # Insert strings with proper escaping
                 values.append(f"'{str(v).replace("'", "''")}'")
         insert_sql = f"INSERT INTO {table_name} VALUES ({', '.join(values)})"
         cursor.execute(insert_sql)
