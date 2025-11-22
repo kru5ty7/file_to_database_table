@@ -10,6 +10,47 @@ This tool allows you to convert a CSV or Excel file into a database table in MS 
 
 ## Setup
 
+### Option 1: Using uv (Recommended)
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url>
+    cd file_to_database_table
+    ```
+
+2.  **Install uv if you haven't already:**
+    ```bash
+    # On Windows
+    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+    # On macOS/Linux
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+
+3.  **Install dependencies with uv:**
+    ```bash
+    uv sync
+    ```
+
+4.  **Configure the database connection:**
+    Copy the template and fill in your MS SQL Server details:
+    ```bash
+    cp config.json.template config.json
+    ```
+
+    Edit `config.json`:
+    ```json
+    {
+        "server": "your_server_name",
+        "database": "your_database_name",
+        "username": "your_username",
+        "password": "your_password",
+        "driver": "{ODBC Driver 17 for SQL Server}"
+    }
+    ```
+
+### Option 2: Using pip
+
 1.  **Clone the repository:**
     ```bash
     git clone <repository_url>
@@ -37,7 +78,12 @@ This tool allows you to convert a CSV or Excel file into a database table in MS 
     ```
 
 5.  **Configure the database connection:**
-    Open the `config.json` file and fill in your MS SQL Server details:
+    Copy the template and fill in your MS SQL Server details:
+    ```bash
+    cp config.json.template config.json
+    ```
+
+    Edit `config.json`:
     ```json
     {
         "server": "your_server_name",
@@ -50,10 +96,15 @@ This tool allows you to convert a CSV or Excel file into a database table in MS 
 
 ## Usage
 
-1.  **Run the script:**
-    ```bash
-    python main.py
-    ```
+### With uv:
+```bash
+uv run python main.py
+```
+
+### With traditional Python:
+```bash
+python main.py
+```
 
 2.  **Enter the file path:**
     When prompted, enter the full path to your CSV or Excel file.
