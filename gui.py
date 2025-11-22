@@ -16,14 +16,17 @@ from main import (
     logger,
     get_available_connections,
     encrypt_password,
-    decrypt_password
+    decrypt_password,
+    infer_column_type
 )
+import pandas as pd
 
 class FileToDBGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("File to Database Table Converter")
         self.root.geometry("900x700")
+        self.root.minsize(600, 500)  # Set minimum window size
         self.root.resizable(True, True)
 
         # Message queue for thread-safe GUI updates
@@ -33,11 +36,11 @@ class FileToDBGUI:
         style = ttk.Style()
         style.theme_use('clam')
 
-        # Main container
-        main_frame = ttk.Frame(root, padding="20")
+        # Main container with scrollbar support
+        main_frame = ttk.Frame(root, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
-        # Configure grid weights
+        # Configure grid weights for responsive layout
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
@@ -46,31 +49,63 @@ class FileToDBGUI:
         title_label = ttk.Label(
             main_frame,
             text="File to Database Table Converter",
-            font=("Helvetica", 18, "bold")
+            font=("Helvetica", 14, "bold")
         )
-        title_label.grid(row=0, column=0, pady=(0, 20), sticky=tk.W)
+        title_label.grid(row=0, column=0, pady=(0, 10), sticky=tk.W)
 
         # File Selection Section
-        file_frame = ttk.LabelFrame(main_frame, text="File Selection", padding="10")
-        file_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
-        file_frame.columnconfigure(1, weight=1)
+        file_frame = ttk.LabelFrame(main_frame, text="File Queue", padding="5")
+        file_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 5))
+        file_frame.columnconfigure(0, weight=1)
+        file_frame.rowconfigure(0, weight=1)
+        main_frame.rowconfigure(1, weight=2)  # Give more weight to file queue
 
-        ttk.Label(file_frame, text="File Path:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
-        self.file_path_var = tk.StringVar()
-        self.file_entry = ttk.Entry(file_frame, textvariable=self.file_path_var, width=50)
-        self.file_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(0, 10))
+        # File queue listbox
+        queue_container = ttk.Frame(file_frame)
+        queue_container.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 5))
+        queue_container.columnconfigure(0, weight=1)
+        queue_container.rowconfigure(0, weight=1)
 
-        self.browse_button = ttk.Button(file_frame, text="Browse", command=self.browse_file)
-        self.browse_button.grid(row=0, column=2)
+        self.file_queue_listbox = tk.Listbox(
+            queue_container,
+            height=4,  # Reduced minimum height
+            selectmode=tk.EXTENDED,
+            relief=tk.SUNKEN,
+            borderwidth=2,
+            bg='white',
+            fg='black',
+            font=('Arial', 10)
+        )
+        self.file_queue_listbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=2, pady=2)
+
+        queue_scrollbar = ttk.Scrollbar(queue_container, orient=tk.VERTICAL, command=self.file_queue_listbox.yview)
+        queue_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        self.file_queue_listbox.config(yscrollcommand=queue_scrollbar.set)
+
+        # File queue management buttons
+        queue_btn_frame = ttk.Frame(file_frame)
+        queue_btn_frame.grid(row=1, column=0, sticky=(tk.W, tk.E))
+
+        self.add_files_button = ttk.Button(queue_btn_frame, text="Add Files", command=self.add_files)
+        self.add_files_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.remove_files_button = ttk.Button(queue_btn_frame, text="Remove Selected", command=self.remove_selected_files)
+        self.remove_files_button.pack(side=tk.LEFT, padx=(0, 5))
+
+        self.clear_queue_button = ttk.Button(queue_btn_frame, text="Clear All", command=self.clear_file_queue)
+        self.clear_queue_button.pack(side=tk.LEFT)
+
+        # File queue
+        self.file_queue = []
 
         # Database Info Display
-        db_frame = ttk.LabelFrame(main_frame, text="Database Connection", padding="10")
-        db_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        db_frame = ttk.LabelFrame(main_frame, text="Database Connection", padding="5")
+        db_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
         db_frame.columnconfigure(1, weight=1)
 
         # Connection selector
         connection_selector_frame = ttk.Frame(db_frame)
-        connection_selector_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        connection_selector_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 5))
 
         ttk.Label(connection_selector_frame, text="Connection:").pack(side=tk.LEFT, padx=(0, 10))
 
@@ -95,8 +130,8 @@ class FileToDBGUI:
         )
 
         # Options Section
-        options_frame = ttk.LabelFrame(main_frame, text="Options", padding="10")
-        options_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        options_frame = ttk.LabelFrame(main_frame, text="Options", padding="5")
+        options_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
 
         self.drop_existing_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(
@@ -106,8 +141,8 @@ class FileToDBGUI:
         ).grid(row=0, column=0, sticky=tk.W)
 
         # Progress Section
-        progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="10")
-        progress_frame.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+        progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="5")
+        progress_frame.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
         progress_frame.columnconfigure(0, weight=1)
 
         self.progress_var = tk.DoubleVar()
@@ -123,16 +158,15 @@ class FileToDBGUI:
         self.status_label.grid(row=1, column=0, sticky=tk.W)
 
         # Log Output Section
-        log_frame = ttk.LabelFrame(main_frame, text="Log Output", padding="10")
-        log_frame.grid(row=5, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        log_frame = ttk.LabelFrame(main_frame, text="Log Output", padding="5")
+        log_frame.grid(row=5, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 5))
         log_frame.columnconfigure(0, weight=1)
         log_frame.rowconfigure(0, weight=1)
-        main_frame.rowconfigure(5, weight=1)
+        main_frame.rowconfigure(5, weight=3)  # Give more weight to log section
 
         self.log_text = scrolledtext.ScrolledText(
             log_frame,
-            height=15,
-            width=80,
+            height=8,  # Reduced minimum height
             wrap=tk.WORD,
             font=("Courier", 9),
             state='disabled'
@@ -188,10 +222,10 @@ class FileToDBGUI:
         self.log_message("Opening connection management dialog", "INFO")
         ConnectionManagerDialog(self.root, self)
 
-    def browse_file(self):
-        """Open file browser dialog"""
-        filename = filedialog.askopenfilename(
-            title="Select a file",
+    def add_files(self):
+        """Open file browser dialog to add multiple files"""
+        filenames = filedialog.askopenfilenames(
+            title="Select files",
             filetypes=[
                 ("Supported Files", "*.csv *.xlsx *.xls"),
                 ("CSV files", "*.csv"),
@@ -199,9 +233,57 @@ class FileToDBGUI:
                 ("All files", "*.*")
             ]
         )
-        if filename:
-            self.file_path_var.set(filename)
-            self.log_message(f"Selected file: {filename}")
+
+        # Debug: Log the filenames returned
+        self.log_message(f"Selected {len(filenames)} file(s) from dialog", "INFO")
+
+        if filenames:
+            added_count = 0
+            for filename in filenames:
+                if filename not in self.file_queue:
+                    self.file_queue.append(filename)
+                    basename = os.path.basename(filename)
+                    self.file_queue_listbox.insert(tk.END, basename)
+                    self.log_message(f"Added to listbox: {basename}", "INFO")
+                    added_count += 1
+                else:
+                    self.log_message(f"Skipped duplicate: {os.path.basename(filename)}", "INFO")
+
+            if added_count > 0:
+                self.log_message(f"Added {added_count} file(s) to queue. Total: {len(self.file_queue)}")
+                # Force listbox update
+                self.file_queue_listbox.update()
+            else:
+                self.log_message("No new files added (duplicates skipped)", "INFO")
+        else:
+            self.log_message("No files selected", "INFO")
+
+    def remove_selected_files(self):
+        """Remove selected files from queue"""
+        selected_indices = self.file_queue_listbox.curselection()
+        if not selected_indices:
+            self.log_message("No files selected for removal", "INFO")
+            return
+
+        # Remove in reverse order to maintain correct indices
+        for index in reversed(selected_indices):
+            filename = self.file_queue[index]
+            self.file_queue.pop(index)
+            self.file_queue_listbox.delete(index)
+            self.log_message(f"Removed: {os.path.basename(filename)}")
+
+        self.log_message(f"Files remaining in queue: {len(self.file_queue)}")
+
+    def clear_file_queue(self):
+        """Clear all files from queue"""
+        if len(self.file_queue) == 0:
+            self.log_message("Queue is already empty", "INFO")
+            return
+
+        count = len(self.file_queue)
+        self.file_queue.clear()
+        self.file_queue_listbox.delete(0, tk.END)
+        self.log_message(f"Cleared {count} file(s) from queue")
 
     def log_message(self, message, level="INFO"):
         """Add message to log text widget"""
@@ -271,40 +353,131 @@ class FileToDBGUI:
         threading.Thread(target=test, daemon=True).start()
 
     def start_conversion(self):
-        """Start the conversion process in a separate thread"""
-        file_path = self.file_path_var.get()
+        """Start the batch conversion process in a separate thread"""
         connection_name = self.connection_var.get()
 
-        if not file_path:
-            messagebox.showwarning("No File Selected", "Please select a file to convert.")
+        if len(self.file_queue) == 0:
+            messagebox.showwarning("No Files in Queue", "Please add files to the queue before converting.")
             return
 
         if not connection_name:
             messagebox.showwarning("No Connection Selected", "Please select a database connection.")
             return
 
-        if not os.path.exists(file_path):
-            messagebox.showerror("File Not Found", f"File not found: {file_path}")
+        # Validate all files exist
+        invalid_files = [f for f in self.file_queue if not os.path.exists(f)]
+        if invalid_files:
+            messagebox.showerror(
+                "Files Not Found",
+                f"The following files were not found:\n" + "\n".join([os.path.basename(f) for f in invalid_files])
+            )
             return
 
         # Disable buttons during conversion
         self.convert_button.config(state="disabled")
-        self.browse_button.config(state="disabled")
+        self.add_files_button.config(state="disabled")
+        self.remove_files_button.config(state="disabled")
+        self.clear_queue_button.config(state="disabled")
 
         # Reset progress
         self.update_progress(0)
         self.update_status("Converting...", "blue")
-        self.log_message(f"Starting conversion process using connection '{connection_name}'...")
+        self.log_message(f"Starting batch conversion of {len(self.file_queue)} file(s) using connection '{connection_name}'...")
 
-        # Start conversion in background thread
+        # Start batch conversion in background thread
         threading.Thread(
-            target=self.convert_file,
-            args=(file_path, connection_name),
+            target=self.convert_batch,
+            args=(self.file_queue.copy(), connection_name),
             daemon=True
         ).start()
 
+    def convert_batch(self, file_list, connection_name):
+        """Convert multiple files to database tables (runs in background thread)"""
+        total_files = len(file_list)
+        successful_files = 0
+        failed_files = []
+
+        try:
+            # Connect to database once for all files
+            self.message_queue.put(("log", f"Connecting to database using '{connection_name}'...", "INFO"))
+            conn = get_db_connection(connection_name)
+            cursor = conn.cursor()
+
+            for file_index, file_path in enumerate(file_list, 1):
+                try:
+                    filename = os.path.basename(file_path)
+                    self.message_queue.put(("log", f"\n[{file_index}/{total_files}] Processing: {filename}", "INFO"))
+
+                    # Calculate progress for this file (each file gets equal portion)
+                    file_progress_start = int(((file_index - 1) / total_files) * 100)
+                    file_progress_range = int(100 / total_files)
+
+                    # Read file
+                    self.message_queue.put(("progress", file_progress_start + int(file_progress_range * 0.1)))
+                    dataframes = get_dataframes(file_path)
+                    self.message_queue.put(("log", f"  Found {len(dataframes)} sheet(s)", "INFO"))
+
+                    # Process each sheet
+                    base_table_name = sanitize_name(os.path.splitext(filename)[0])
+                    total_sheets = len(dataframes)
+
+                    for idx, (sheet_name, df) in enumerate(dataframes.items()):
+                        if len(dataframes) == 1:
+                            table_name = base_table_name
+                        else:
+                            table_name = f"{base_table_name}_{sheet_name}"
+
+                        self.message_queue.put(("log", f"  Creating table: {table_name}", "INFO"))
+                        create_table_from_dataframe(df, table_name, cursor)
+
+                        # Update progress within this file
+                        sheet_progress = int(file_progress_range * (0.2 + 0.7 * (idx + 1) / total_sheets))
+                        self.message_queue.put(("progress", file_progress_start + sheet_progress))
+
+                    self.message_queue.put(("log", f"  ✓ {filename} completed successfully", "SUCCESS"))
+                    successful_files += 1
+
+                except Exception as e:
+                    self.message_queue.put(("log", f"  ✗ Failed to process {filename}: {e}", "ERROR"))
+                    failed_files.append((filename, str(e)))
+                    # Continue with next file
+
+            cursor.close()
+            conn.close()
+
+            # Final summary
+            self.message_queue.put(("progress", 100))
+            self.message_queue.put(("log", f"\n{'='*60}", "INFO"))
+            self.message_queue.put(("log", f"Batch conversion completed!", "SUCCESS"))
+            self.message_queue.put(("log", f"  Total files: {total_files}", "INFO"))
+            self.message_queue.put(("log", f"  Successful: {successful_files}", "SUCCESS"))
+            if failed_files:
+                self.message_queue.put(("log", f"  Failed: {len(failed_files)}", "ERROR"))
+                for filename, error in failed_files:
+                    self.message_queue.put(("log", f"    - {filename}: {error}", "ERROR"))
+            self.message_queue.put(("log", f"{'='*60}", "INFO"))
+
+            self.message_queue.put(("status", f"Completed: {successful_files}/{total_files} files", "green"))
+            self.message_queue.put(("enable_buttons", None))
+
+            if failed_files:
+                error_summary = f"Completed with {len(failed_files)} error(s).\n\n" + \
+                               "\n".join([f"- {f[0]}" for f in failed_files[:5]])
+                if len(failed_files) > 5:
+                    error_summary += f"\n... and {len(failed_files) - 5} more"
+                self.message_queue.put(("show_error", error_summary))
+            else:
+                self.message_queue.put(("show_success", f"Successfully converted all {successful_files} file(s)!"))
+
+        except Exception as e:
+            self.message_queue.put(("log", f"Batch conversion error: {e}", "ERROR"))
+            self.message_queue.put(("status", "Batch conversion failed", "red"))
+            self.message_queue.put(("progress", 0))
+            self.message_queue.put(("enable_buttons", None))
+            self.message_queue.put(("show_error", f"Batch conversion failed: {str(e)}"))
+
     def convert_file(self, file_path, connection_name):
-        """Convert file to database tables (runs in background thread)"""
+        """Convert file to database tables (runs in background thread) - Legacy single file method"""
         try:
             # Read file
             self.message_queue.put(("log", f"Reading file: {file_path}", "INFO"))
@@ -395,7 +568,9 @@ class FileToDBGUI:
 
                 elif msg_type == "enable_buttons":
                     self.convert_button.config(state="normal")
-                    self.browse_button.config(state="normal")
+                    self.add_files_button.config(state="normal")
+                    self.remove_files_button.config(state="normal")
+                    self.clear_queue_button.config(state="normal")
 
                 elif msg_type == "show_success":
                     messagebox.showinfo("Success", msg_data)

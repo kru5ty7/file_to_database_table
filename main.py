@@ -309,7 +309,8 @@ def create_table_from_dataframe(df, table_name, cursor):
                 values.append(str(v))
             else:
                 # Insert strings with proper escaping
-                values.append(f"'{str(v).replace("'", "''")}'")
+                escaped_value = str(v).replace("'", "''")
+                values.append(f"'{escaped_value}'")
         insert_sql = f"INSERT INTO {table_name} VALUES ({', '.join(values)})"
 
         try:
