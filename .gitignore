@@ -41,3 +41,11 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+
+# PyInstaller
+*.spec.bak
+*.manifest
+*.exe (if not in dist/)
+
+# GitHub Actions
+.github/workflows/*.log

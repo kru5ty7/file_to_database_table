@@ -1,177 +1,227 @@
-# File to Database Table
+# File to Database Table Converter
 
-This tool allows you to convert a CSV or Excel file into a database table in MS SQL Server.
+A powerful Windows GUI application to convert CSV and Excel files to SQL Server database tables with advanced data preview and column customization.
 
-## Prerequisites
+## ✨ Features
 
-- Python 3.x
-- MS SQL Server
-- ODBC Driver 17 for SQL Server
+- **📁 Batch File Processing** - Add multiple CSV/Excel files to a queue
+- **👁️ Data Preview** - Preview first 20 rows before importing
+- **✏️ Column Editing** - Rename columns and override data types
+- **📊 Statistics** - View row counts, column counts, and NULL value statistics
+- **🗄️ Multi-Sheet Support** - Handle Excel files with multiple sheets
+- **🔐 Connection Management** - Store encrypted database credentials
+- **📈 Progress Tracking** - Real-time progress bars and detailed logging
+- **🎯 Auto Type Detection** - Intelligent SQL type inference (BIGINT, FLOAT, NVARCHAR)
 
-## Setup
+## 🚀 Quick Start
 
-### Option 1: Using uv (Recommended)
+### Option 1: Download Executable (Recommended)
 
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository_url>
-    cd file_to_database_table
-    ```
+1. Go to [Releases](../../releases)
+2. Download the latest `FileToDBConverter-vX.X.X-windows.zip`
+3. Extract and run `FileToDBConverter.exe`
+4. No Python installation required!
 
-2.  **Install uv if you haven't already:**
-    ```bash
-    # On Windows
-    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+### Option 2: Run from Source
 
-    # On macOS/Linux
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    ```
-
-3.  **Install dependencies with uv:**
-    ```bash
-    uv sync
-    ```
-
-4.  **Configure the database connection:**
-    Copy the template and fill in your MS SQL Server details:
-    ```bash
-    cp config.json.template config.json
-    ```
-
-    Edit `config.json` (supports multiple connections):
-    ```json
-    {
-        "default_connection": "production",
-        "connections": {
-            "production": {
-                "server": "your_server_name",
-                "database": "your_database_name",
-                "username": "your_username",
-                "password": "your_password",
-                "driver": "{ODBC Driver 17 for SQL Server}"
-            },
-            "development": {
-                "server": "dev_server_name",
-                "database": "dev_database_name",
-                "username": "dev_username",
-                "password": "dev_password",
-                "driver": "{ODBC Driver 17 for SQL Server}"
-            }
-        }
-    }
-    ```
-
-    **Legacy single-connection format is also supported:**
-    ```json
-    {
-        "server": "your_server_name",
-        "database": "your_database_name",
-        "username": "your_username",
-        "password": "your_password",
-        "driver": "{ODBC Driver 17 for SQL Server}"
-    }
-    ```
-
-### Option 2: Using pip
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository_url>
-    cd file_to_database_table
-    ```
-
-2.  **Create a virtual environment:**
-    ```bash
-    python -m venv venv
-    ```
-
-3.  **Activate the virtual environment:**
-    -   On Windows:
-        ```bash
-        .\venv\Scripts\activate
-        ```
-    -   On macOS/Linux:
-        ```bash
-        source venv/bin/activate
-        ```
-
-4.  **Install the required packages:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-5.  **Configure the database connection:**
-    Copy the template and fill in your MS SQL Server details:
-    ```bash
-    cp config.json.template config.json
-    ```
-
-    Edit `config.json`:
-    ```json
-    {
-        "server": "your_server_name",
-        "database": "your_database_name",
-        "username": "your_username",
-        "password": "your_password",
-        "driver": "{ODBC Driver 17 for SQL Server}"
-    }
-    ```
-
-## Usage
-
-### Option 1: GUI (Graphical User Interface)
-
-The GUI provides a modern, user-friendly interface for converting files to database tables.
-
-**With uv:**
+**Using uv (Recommended):**
 ```bash
+# Clone the repository
+git clone https://github.com/kru5ty7/file_to_database_table.git
+cd file_to_database_table
+
+# Install uv
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+
+# Install dependencies
+uv sync
+
+# Run the application
 uv run python gui.py
 ```
 
-**With traditional Python:**
+**Using pip:**
 ```bash
+# Clone and create virtual environment
+git clone https://github.com/kru5ty7/file_to_database_table.git
+cd file_to_database_table
+python -m venv venv
+.\venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
 python gui.py
 ```
 
-**Features:**
-- File browser for easy file selection
-- **Multiple database connection support** - switch between different environments (production, development, test)
-- Database connection testing
-- Real-time progress tracking
-- Live log output
-- Support for CSV and Excel files (single or multiple sheets)
+## 📖 Usage Guide
 
-### Option 2: Command Line Interface
+### 1. Add Files to Queue
+- Click **"Add Files"** button
+- Select one or more CSV or Excel files
+- Files appear in the queue list
 
-**With uv:**
+### 2. Preview and Customize (Optional but Recommended!)
+- Select a file from the queue
+- Click **"Preview File"** button
+- In the preview dialog:
+  - View **statistics** (rows, columns, NULL counts)
+  - See **first 20 rows** of data
+  - **Edit column names** in the text fields
+  - **Change data types** using dropdowns
+  - For multi-sheet Excel files: use the sheet selector
+  - Click **"Apply Changes"** to save customizations
+
+### 3. Configure Database Connection
+- Click **"Manage..."** button
+- Add a new connection with:
+  - Server name
+  - Database name
+  - Username and password (encrypted)
+  - Driver (default: ODBC Driver 17 for SQL Server)
+- Click **"Test"** to verify connection
+- Click **"Save"**
+
+### 4. Convert to Database
+- Select a connection from the dropdown
+- Click **"Convert to Database"**
+- Monitor progress in the log window
+- Tables are created with sanitized names
+
+## 🎯 Column Type Detection
+
+The application intelligently detects SQL types:
+
+| Data Pattern | Detected Type |
+|--------------|---------------|
+| Integers (< 2 billion) | `BIGINT` |
+| Large integers (> 2 billion) | `NVARCHAR(MAX)` |
+| Decimal numbers | `FLOAT` |
+| Text/Mixed content | `NVARCHAR(MAX)` |
+
+You can override these in the preview dialog!
+
+## 🔧 Requirements
+
+- **Windows 10/11**
+- **SQL Server** with ODBC Driver 17 or later
+- For source installation: Python 3.10+
+
+### Installing ODBC Driver
+
+Download from: [Microsoft ODBC Driver for SQL Server](https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
+
+## 🏗️ Building from Source
+
+### Local Build
+
 ```bash
-uv run python main.py
+# Install PyInstaller
+pip install pyinstaller
+
+# Build executable
+build_exe.bat
+
+# Or manually:
+pyinstaller FileToDBConverter.spec
+
+# Executable created at: dist\FileToDBConverter.exe
 ```
 
-**With traditional Python:**
-```bash
-python main.py
+### Automated GitHub Release
+
+This project uses GitHub Actions for automatic releases:
+
+1. **Create a version tag**:
+   ```bash
+   git tag v1.0.0
+   git push origin v1.0.0
+   ```
+
+2. **GitHub Actions automatically**:
+   - Builds the Windows executable
+   - Creates a GitHub Release
+   - Uploads the `.exe` file
+
+See [RELEASE.md](RELEASE.md) for detailed instructions.
+
+## 📁 Project Structure
+
+```
+file_to_database_table/
+├── gui.py                      # Main GUI application
+├── main.py                     # Core logic (database, file processing)
+├── FileToDBConverter.spec      # PyInstaller build configuration
+├── build_exe.bat               # Local build script
+├── requirements.txt            # Python dependencies
+├── .github/
+│   └── workflows/
+│       └── build-release.yml   # GitHub Actions workflow
+├── logs/                       # Application logs (auto-created)
+└── config.json                 # Encrypted connection configs (auto-created)
 ```
 
-When prompted, enter the full path to your CSV or Excel file. The script will create tables in your database with sanitized names and insert all data.
+## 🔒 Security
 
-## Features
+- **Passwords are encrypted** using Fernet (symmetric encryption)
+- Connection details stored in `config.json`
+- Encryption key stored in `.encryption_key`
+- Both files are `.gitignore`d for safety
 
-- **Multi-sheet Excel support**: Automatically processes all sheets in an Excel workbook
-- **Data type inference**: Intelligently detects numeric vs text columns
-- **Leading zero preservation**: Values like "020435" are preserved as strings
-- **Name sanitization**: Table and column names are sanitized for SQL compatibility
-- **Comprehensive logging**: Detailed logs saved to `logs/` directory
-- **Progress tracking**: Real-time progress updates during conversion
-- **Error handling**: Detailed error messages and full tracebacks
-- **Password encryption**: Database passwords are encrypted using Fernet symmetric encryption before being stored in config.json
+## 🐛 Troubleshooting
 
-## Security
+### Connection Fails
+- Verify SQL Server is running
+- Check Windows Firewall settings
+- Ensure ODBC Driver is installed
+- Test connection using "Test Connection" button
 
-Passwords in `config.json` are automatically encrypted using Fernet symmetric encryption (from the `cryptography` library). The encryption key is stored in `.encryption_key` file in the project directory.
+### Files Not Showing in Queue
+- Check file permissions
+- Ensure files are valid CSV/Excel format
+- Look for errors in the log window
 
-**Important security notes:**
-- Keep `.encryption_key` file secure and never commit it to version control
-- The `.gitignore` file is configured to exclude both `.encryption_key` and `config.json`
-- If you lose the `.encryption_key` file, you'll need to re-enter all passwords
-- For production use, consider additional security measures like environment variables or a secrets manager
+### Preview Dialog Issues
+- Large files may take time to load
+- Files with many columns may need horizontal scrolling
+- Corrupted files will show error messages
+
+### Build Issues
+- Ensure all dependencies are installed: `pip install -r requirements.txt`
+- Clean previous builds: `rmdir /s /q build dist`
+- Check `build\FileToDBConverter\warn-FileToDBConverter.txt` for warnings
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Commit changes: `git commit -m 'Add feature'`
+4. Push to branch: `git push origin feature-name`
+5. Open a Pull Request
+
+## 📄 License
+
+This project is open source and available under the MIT License.
+
+## 🙏 Acknowledgments
+
+Built with:
+- **tkinter** - GUI framework
+- **pandas** - Data processing
+- **pyodbc** - SQL Server connectivity
+- **openpyxl** - Excel file handling
+- **cryptography** - Password encryption
+- **PyInstaller** - Executable packaging
+
+## 📞 Support
+
+For issues, questions, or feature requests:
+- Open an [Issue](../../issues)
+- Check [RELEASE.md](RELEASE.md) for build documentation
+
+---
+
+**Made with ❤️ by kru5ty7**
