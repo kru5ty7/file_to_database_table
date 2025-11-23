@@ -264,3 +264,4 @@ class DataPreviewDialog:
 
     def cancel(self):
         """Close dialog without applying changes"""
+        self.dialog.destroy()
