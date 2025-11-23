@@ -3,7 +3,8 @@ Connection Manager Dialog - Manage database connections
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
+import customtkinter as ctk
 import json
 import threading
 from src.database import get_available_connections
@@ -13,9 +14,9 @@ from src.utils import encrypt_password, decrypt_password
 class ConnectionManagerDialog:
     def __init__(self, parent, main_app):
         self.main_app = main_app
-        self.dialog = tk.Toplevel(parent)
+        self.dialog = ctk.CTkToplevel(parent)
         self.dialog.title("Manage Database Connections")
-        self.dialog.geometry("700x500")
+        self.dialog.geometry("800x550")
         self.dialog.transient(parent)
         self.dialog.grab_set()
 
@@ -23,85 +24,113 @@ class ConnectionManagerDialog:
         self.load_config()
 
         # Main frame
-        main_frame = ttk.Frame(self.dialog, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame = ctk.CTkFrame(self.dialog)
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
         self.dialog.columnconfigure(0, weight=1)
         self.dialog.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(0, weight=1)
 
         # Connection list
-        list_frame = ttk.LabelFrame(main_frame, text="Connections", padding="10")
+        list_frame = ctk.CTkFrame(main_frame)
         list_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=(0, 10))
         list_frame.columnconfigure(0, weight=1)
-        list_frame.rowconfigure(0, weight=1)
+        list_frame.rowconfigure(1, weight=1)
 
-        self.conn_listbox = tk.Listbox(list_frame, height=15)
-        self.conn_listbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        self.conn_listbox.bind('<<ListboxSelect>>', self.on_connection_select)
+        ctk.CTkLabel(list_frame, text="Connections", font=ctk.CTkFont(size=13, weight="bold")).grid(row=0, column=0, columnspan=2, sticky=tk.W, padx=10, pady=(10, 5))
 
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.conn_listbox.yview)
-        scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
-        self.conn_listbox.config(yscrollcommand=scrollbar.set)
+        # Use CTkTextbox for connection list (styled like listbox)
+        self.conn_textbox = ctk.CTkTextbox(list_frame, height=300, width=200, font=ctk.CTkFont(size=11))
+        self.conn_textbox.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=(0, 10))
+        self.conn_textbox.bind("<Button-1>", self._on_connection_click)
+
+        # Store selection
+        self.selected_connection_index = None
 
         # Buttons for list
-        list_btn_frame = ttk.Frame(list_frame)
-        list_btn_frame.grid(row=1, column=0, columnspan=2, pady=(10, 0))
+        list_btn_frame = ctk.CTkFrame(list_frame, fg_color="transparent")
+        list_btn_frame.grid(row=2, column=0, pady=(0, 10), padx=10)
 
-        ttk.Button(list_btn_frame, text="Add", command=self.add_connection).pack(side=tk.LEFT, padx=5)
-        ttk.Button(list_btn_frame, text="Delete", command=self.delete_connection).pack(side=tk.LEFT, padx=5)
+        ctk.CTkButton(list_btn_frame, text="➕ Add", command=self.add_connection, width=90).pack(side=tk.LEFT, padx=5)
+        ctk.CTkButton(list_btn_frame, text="🗑 Delete", command=self.delete_connection, width=90, fg_color="#d32f2f", hover_color="#b71c1c").pack(side=tk.LEFT, padx=5)
 
         # Connection details
-        details_frame = ttk.LabelFrame(main_frame, text="Connection Details", padding="10")
+        details_frame = ctk.CTkFrame(main_frame)
         details_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
         details_frame.columnconfigure(1, weight=1)
 
-        row = 0
-        ttk.Label(details_frame, text="Connection Name:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        ctk.CTkLabel(details_frame, text="Connection Details", font=ctk.CTkFont(size=13, weight="bold")).grid(row=0, column=0, columnspan=2, sticky=tk.W, padx=10, pady=(10, 15))
+
+        row = 1
+        ctk.CTkLabel(details_frame, text="Connection Name:").grid(row=row, column=0, sticky=tk.W, padx=(10, 5), pady=5)
         self.name_var = tk.StringVar()
-        self.name_entry = ttk.Entry(details_frame, textvariable=self.name_var, width=30)
-        self.name_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5)
+        self.name_entry = ctk.CTkEntry(details_frame, textvariable=self.name_var, width=250)
+        self.name_entry.grid(row=row, column=1, sticky=(tk.W, tk.E), padx=(5, 10), pady=5)
 
         row += 1
-        ttk.Label(details_frame, text="Server:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        ctk.CTkLabel(details_frame, text="Server:").grid(row=row, column=0, sticky=tk.W, padx=(10, 5), pady=5)
         self.server_var = tk.StringVar()
-        ttk.Entry(details_frame, textvariable=self.server_var, width=30).grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5)
+        ctk.CTkEntry(details_frame, textvariable=self.server_var, width=250).grid(row=row, column=1, sticky=(tk.W, tk.E), padx=(5, 10), pady=5)
 
         row += 1
-        ttk.Label(details_frame, text="Database:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        ctk.CTkLabel(details_frame, text="Database:").grid(row=row, column=0, sticky=tk.W, padx=(10, 5), pady=5)
         self.database_var = tk.StringVar()
-        ttk.Entry(details_frame, textvariable=self.database_var, width=30).grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5)
+        ctk.CTkEntry(details_frame, textvariable=self.database_var, width=250).grid(row=row, column=1, sticky=(tk.W, tk.E), padx=(5, 10), pady=5)
 
         row += 1
-        ttk.Label(details_frame, text="Username:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        ctk.CTkLabel(details_frame, text="Username:").grid(row=row, column=0, sticky=tk.W, padx=(10, 5), pady=5)
         self.username_var = tk.StringVar()
-        ttk.Entry(details_frame, textvariable=self.username_var, width=30).grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5)
+        ctk.CTkEntry(details_frame, textvariable=self.username_var, width=250).grid(row=row, column=1, sticky=(tk.W, tk.E), padx=(5, 10), pady=5)
 
         row += 1
-        ttk.Label(details_frame, text="Password:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        ctk.CTkLabel(details_frame, text="Password:").grid(row=row, column=0, sticky=tk.W, padx=(10, 5), pady=5)
         self.password_var = tk.StringVar()
-        ttk.Entry(details_frame, textvariable=self.password_var, width=30, show="*").grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5)
+        ctk.CTkEntry(details_frame, textvariable=self.password_var, width=250, show="*").grid(row=row, column=1, sticky=(tk.W, tk.E), padx=(5, 10), pady=5)
 
         row += 1
-        ttk.Label(details_frame, text="Driver:").grid(row=row, column=0, sticky=tk.W, pady=5)
+        ctk.CTkLabel(details_frame, text="Driver:").grid(row=row, column=0, sticky=tk.W, padx=(10, 5), pady=5)
         self.driver_var = tk.StringVar(value="{ODBC Driver 17 for SQL Server}")
-        ttk.Entry(details_frame, textvariable=self.driver_var, width=30).grid(row=row, column=1, sticky=(tk.W, tk.E), pady=5)
+        ctk.CTkEntry(details_frame, textvariable=self.driver_var, width=250).grid(row=row, column=1, sticky=(tk.W, tk.E), padx=(5, 10), pady=5)
 
         row += 1
-        details_btn_frame = ttk.Frame(details_frame)
-        details_btn_frame.grid(row=row, column=0, columnspan=2, pady=(20, 0))
+        details_btn_frame = ctk.CTkFrame(details_frame, fg_color="transparent")
+        details_btn_frame.grid(row=row, column=0, columnspan=2, pady=(20, 10))
 
-        ttk.Button(details_btn_frame, text="Save", command=self.save_connection).pack(side=tk.LEFT, padx=5)
-        ttk.Button(details_btn_frame, text="Test", command=self.test_current_connection).pack(side=tk.LEFT, padx=5)
+        ctk.CTkButton(details_btn_frame, text="💾 Save", command=self.save_connection, width=100, fg_color="#2fa572", hover_color="#26734f").pack(side=tk.LEFT, padx=5)
+        ctk.CTkButton(details_btn_frame, text="✓ Test Connection", command=self.test_current_connection, width=140).pack(side=tk.LEFT, padx=5)
 
         # Bottom buttons
-        bottom_frame = ttk.Frame(main_frame)
+        bottom_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         bottom_frame.grid(row=1, column=0, columnspan=2, pady=(10, 0))
 
-        ttk.Button(bottom_frame, text="Close", command=self.close_dialog).pack(side=tk.RIGHT, padx=5)
+        ctk.CTkButton(bottom_frame, text="Close", command=self.close_dialog, width=100).pack(side=tk.RIGHT, padx=5)
+
+        # Store connection names list
+        self.connection_names = []
 
         # Load connections into list
         self.refresh_list()
+
+    def _update_connection_list_display(self):
+        """Update the connection textbox display"""
+        self.conn_textbox.configure(state='normal')
+        self.conn_textbox.delete("1.0", tk.END)
+        for i, conn_name in enumerate(self.connection_names):
+            prefix = "▶ " if i == self.selected_connection_index else "  "
+            self.conn_textbox.insert(tk.END, f"{prefix}{conn_name}\n")
+        self.conn_textbox.configure(state='disabled')
+
+    def _on_connection_click(self, event):
+        """Handle click on connection textbox"""
+        try:
+            index = self.conn_textbox.index(f"@{event.x},{event.y}")
+            line_num = int(index.split('.')[0]) - 1
+            if 0 <= line_num < len(self.connection_names):
+                self.selected_connection_index = line_num
+                self._update_connection_list_display()
+                self.on_connection_select()
+        except:
+            pass
 
     def load_config(self):
         """Load config from file"""
@@ -142,19 +171,18 @@ class ConnectionManagerDialog:
 
     def refresh_list(self):
         """Refresh the connection list"""
-        self.conn_listbox.delete(0, tk.END)
-        for conn_name in self.config.get('connections', {}).keys():
-            self.conn_listbox.insert(tk.END, conn_name)
+        self.connection_names = list(self.config.get('connections', {}).keys())
+        self.selected_connection_index = None
+        self._update_connection_list_display()
 
-    def on_connection_select(self, event):
+    def on_connection_select(self):
         """Handle connection selection"""
-        selection = self.conn_listbox.curselection()
-        if selection:
-            conn_name = self.conn_listbox.get(selection[0])
+        if self.selected_connection_index is not None and self.selected_connection_index < len(self.connection_names):
+            conn_name = self.connection_names[self.selected_connection_index]
             conn_data = self.config['connections'][conn_name]
 
             self.name_var.set(conn_name)
-            self.name_entry.config(state='readonly')
+            self.name_entry.configure(state='readonly')
             self.server_var.set(conn_data.get('server', ''))
             self.database_var.set(conn_data.get('database', ''))
             self.username_var.set(conn_data.get('username', ''))
@@ -167,14 +195,15 @@ class ConnectionManagerDialog:
 
     def add_connection(self):
         """Add new connection"""
-        self.name_entry.config(state='normal')
+        self.name_entry.configure(state='normal')
         self.name_var.set('')
         self.server_var.set('')
         self.database_var.set('')
         self.username_var.set('')
         self.password_var.set('')
         self.driver_var.set('{ODBC Driver 17 for SQL Server}')
-        self.conn_listbox.selection_clear(0, tk.END)
+        self.selected_connection_index = None
+        self._update_connection_list_display()
         self.main_app.log_message("New connection form opened", "INFO")
 
     def save_connection(self):
@@ -217,17 +246,16 @@ class ConnectionManagerDialog:
             messagebox.showinfo("Success", f"Connection '{conn_name}' saved successfully")
             self.refresh_list()
             self.main_app.refresh_connections()
-            self.name_entry.config(state='readonly')
+            self.name_entry.configure(state='readonly')
 
     def delete_connection(self):
         """Delete selected connection"""
-        selection = self.conn_listbox.curselection()
-        if not selection:
+        if self.selected_connection_index is None or self.selected_connection_index >= len(self.connection_names):
             self.main_app.log_message("Delete failed: No connection selected", "ERROR")
             messagebox.showwarning("Warning", "Please select a connection to delete")
             return
 
-        conn_name = self.conn_listbox.get(selection[0])
+        conn_name = self.connection_names[self.selected_connection_index]
 
         self.main_app.log_message(f"Delete confirmation requested for connection '{conn_name}'", "INFO")
 

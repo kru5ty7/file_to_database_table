@@ -1,17 +1,18 @@
 # File to Database Table Converter
 
-A powerful Windows GUI application to convert CSV and Excel files to SQL Server database tables with advanced data preview and column customization.
+A modern Windows GUI application to convert CSV and Excel files to SQL Server database tables with advanced data preview and column customization. Built with CustomTkinter for a sleek, contemporary interface.
 
-## ✨ Features
+## Features
 
-- **📁 Batch File Processing** - Add multiple CSV/Excel files to a queue
-- **👁️ Data Preview** - Preview first 20 rows before importing
-- **✏️ Column Editing** - Rename columns and override data types
-- **📊 Statistics** - View row counts, column counts, and NULL value statistics
-- **🗄️ Multi-Sheet Support** - Handle Excel files with multiple sheets
-- **🔐 Connection Management** - Store encrypted database credentials
-- **📈 Progress Tracking** - Real-time progress bars and detailed logging
-- **🎯 Auto Type Detection** - Intelligent SQL type inference (BIGINT, FLOAT, NVARCHAR)
+- **Batch File Processing** - Add multiple CSV/Excel files to a queue with dynamic display
+- **Modern Data Preview** - Interactive preview of first 20 rows with column-by-column editing
+- **Column Customization** - Rename columns and override data types with visual controls
+- **Real-Time Statistics** - View row counts, column counts, and NULL value statistics per column
+- **Multi-Sheet Support** - Handle Excel files with multiple sheets seamlessly
+- **Connection Management** - Store encrypted database credentials securely
+- **Progress Tracking** - Visual progress bar with percentage display and detailed logging
+- **Auto Type Detection** - Intelligent SQL type inference (BIGINT, FLOAT, NVARCHAR, DATE, DATETIME)
+- **Modern UI** - Clean, professional interface built with CustomTkinter
 
 ## 🚀 Quick Start
 
@@ -37,7 +38,7 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 uv sync
 
 # Run the application
-uv run python gui.py
+uv run python -m src.app
 ```
 
 **Using pip:**
@@ -52,7 +53,7 @@ python -m venv venv
 pip install -r requirements.txt
 
 # Run the application
-python gui.py
+python -m src.app
 ```
 
 ## 📖 Usage Guide
@@ -65,13 +66,18 @@ python gui.py
 ### 2. Preview and Customize (Optional but Recommended!)
 - Select a file from the queue
 - Click **"Preview File"** button
-- In the preview dialog:
-  - View **statistics** (rows, columns, NULL counts)
-  - See **first 20 rows** of data
-  - **Edit column names** in the text fields
-  - **Change data types** using dropdowns
-  - For multi-sheet Excel files: use the sheet selector
+- In the modern preview dialog:
+  - View **overall statistics** (total rows, columns, NULL counts)
+  - Browse **sheet selector** for multi-sheet Excel files
+  - See **column-by-column layout** with:
+    - Editable column name field
+    - Detected type display (auto-inferred)
+    - SQL type dropdown selector
+    - Per-column NULL count and percentage
+    - First 20 data rows displayed vertically
+  - **Horizontal scroll** for files with many columns
   - Click **"Apply Changes"** to save customizations
+  - Click **"Reset to Defaults"** to revert changes
 
 ### 3. Configure Database Connection
 - Click **"Manage..."** button
@@ -102,11 +108,11 @@ The application intelligently detects SQL types:
 
 You can override these in the preview dialog!
 
-## 🔧 Requirements
+## Requirements
 
 - **Windows 10/11**
 - **SQL Server** with ODBC Driver 17 or later
-- For source installation: Python 3.10+
+- For source installation: Python 3.9+
 
 ### Installing ODBC Driver
 
@@ -117,8 +123,10 @@ Download from: [Microsoft ODBC Driver for SQL Server](https://learn.microsoft.co
 ### Local Build
 
 ```bash
-# Install PyInstaller
-pip install pyinstaller
+# Install dependencies (including PyInstaller)
+uv sync
+# or
+pip install -r requirements.txt
 
 # Build executable
 build_exe.bat
@@ -146,15 +154,23 @@ This project uses GitHub Actions for automatic releases:
 
 See [RELEASE.md](RELEASE.md) for detailed instructions.
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 file_to_database_table/
-├── gui.py                      # Main GUI application
-├── main.py                     # Core logic (database, file processing)
+├── src/
+│   ├── app.py                  # Application entry point
+│   ├── gui_main.py             # Main GUI window
+│   ├── database.py             # Database operations
+│   ├── file_processor.py       # File reading and type inference
+│   ├── utils.py                # Encryption and utilities
+│   └── dialogs/
+│       ├── preview_dialog.py   # Data preview dialog
+│       └── connection_dialog.py # Connection management dialog
+├── pyproject.toml              # Project configuration (uv/pip)
+├── requirements.txt            # Python dependencies
 ├── FileToDBConverter.spec      # PyInstaller build configuration
 ├── build_exe.bat               # Local build script
-├── requirements.txt            # Python dependencies
 ├── .github/
 │   └── workflows/
 │       └── build-release.yml   # GitHub Actions workflow
@@ -169,7 +185,7 @@ file_to_database_table/
 - Encryption key stored in `.encryption_key`
 - Both files are `.gitignore`d for safety
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Connection Fails
 - Verify SQL Server is running
@@ -183,14 +199,16 @@ file_to_database_table/
 - Look for errors in the log window
 
 ### Preview Dialog Issues
+- Empty sheets (0 rows) will show "No data rows in this sheet"
 - Large files may take time to load
-- Files with many columns may need horizontal scrolling
-- Corrupted files will show error messages
+- Files with many columns require horizontal scrolling
+- Corrupted files will show error messages in the log
 
 ### Build Issues
-- Ensure all dependencies are installed: `pip install -r requirements.txt`
+- Ensure all dependencies are installed: `uv sync` or `pip install -r requirements.txt`
 - Clean previous builds: `rmdir /s /q build dist`
 - Check `build\FileToDBConverter\warn-FileToDBConverter.txt` for warnings
+- Ensure numpy 2.0+ is installed (required for pre-built wheels)
 
 ## 🤝 Contributing
 
@@ -206,15 +224,18 @@ Contributions are welcome! Please:
 
 This project is open source and available under the MIT License.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 Built with:
-- **tkinter** - GUI framework
-- **pandas** - Data processing
+- **CustomTkinter** - Modern GUI framework
+- **pandas** - Data processing and analysis
 - **pyodbc** - SQL Server connectivity
 - **openpyxl** - Excel file handling
-- **cryptography** - Password encryption
+- **cryptography** - Password encryption (Fernet)
 - **PyInstaller** - Executable packaging
+- **numpy** - Numerical operations
+- **Pillow** - Image handling for UI
+- **darkdetect** - System theme detection
 
 ## 📞 Support
 
