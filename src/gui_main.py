@@ -3,25 +3,41 @@ Main GUI Window - File to Database Converter
 """
 
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
+from tkinter import filedialog, messagebox
+import customtkinter as ctk
 import threading
 import queue
 from datetime import datetime
 import os
+from PIL import ImageGrab
+import subprocess
 
 from src.database import get_db_connection, create_table_from_dataframe, get_available_connections
 from src.file_processor import get_dataframes
 from src.utils import sanitize_name, setup_logging, logger
 from src.dialogs import DataPreviewDialog, ConnectionManagerDialog
 
+# Get version from git tag or use default
+def get_version():
+    """Get version from git tag"""
+    try:
+        result = subprocess.run(['git', 'describe', '--tags', '--abbrev=0'],
+                              capture_output=True, text=True, timeout=2)
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except:
+        pass
+    return "v1.0.0"  # Default version
+
+VERSION = get_version()
+
 
 class FileToDBGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("File to Database Table Converter")
-        self.root.geometry("900x700")
-        self.root.minsize(600, 500)  # Set minimum window size
-        self.root.resizable(True, True)
+        self.root.geometry("950x750")  # Increased window size
+        self.root.minsize(800, 600)  # Increased minimum window size
 
         # Message queue for thread-safe GUI updates
         self.message_queue = queue.Queue()
@@ -29,172 +45,200 @@ class FileToDBGUI:
         # Store column overrides: {file_path: {sheet_name: {'columns': {old_name: new_name}, 'types': {col_name: type}}}}
         self.column_overrides = {}
 
-        # Configure style
-        style = ttk.Style()
-        style.theme_use('clam')
-
         # Main container with scrollbar support
-        main_frame = ttk.Frame(root, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame = ctk.CTkFrame(root)
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
 
         # Configure grid weights for responsive layout
         root.columnconfigure(0, weight=1)
         root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
 
-        # Title
-        title_label = ttk.Label(
-            main_frame,
-            text="File to Database Table Converter",
-            font=("Helvetica", 14, "bold")
+        # Title row
+        title_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        title_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 15))
+        title_frame.columnconfigure(0, weight=1)
+
+        title_label = ctk.CTkLabel(
+            title_frame,
+            text=f"File to Database Table Converter {VERSION}",
+            font=ctk.CTkFont(size=20, weight="bold")
         )
-        title_label.grid(row=0, column=0, pady=(0, 10), sticky=tk.W)
+        title_label.pack(side=tk.LEFT)
 
         # File Selection Section
-        file_frame = ttk.LabelFrame(main_frame, text="File Queue", padding="5")
-        file_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 5))
+        file_frame = ctk.CTkFrame(main_frame)
+        file_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         file_frame.columnconfigure(0, weight=1)
-        file_frame.rowconfigure(0, weight=1)
-        main_frame.rowconfigure(1, weight=2)  # Give more weight to file queue
+        file_frame.rowconfigure(1, weight=1)
 
-        # File queue listbox
-        queue_container = ttk.Frame(file_frame)
-        queue_container.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 5))
-        queue_container.columnconfigure(0, weight=1)
-        queue_container.rowconfigure(0, weight=1)
+        # Frame label
+        ctk.CTkLabel(file_frame, text="File Queue", font=ctk.CTkFont(size=13, weight="bold")).grid(row=0, column=0, sticky=tk.W, padx=10, pady=(10, 5))
 
-        self.file_queue_listbox = tk.Listbox(
-            queue_container,
-            height=4,  # Reduced minimum height
-            selectmode=tk.EXTENDED,
-            relief=tk.SUNKEN,
-            borderwidth=2,
-            bg='white',
-            fg='black',
-            font=('Arial', 10)
+        # File queue textbox - shows 3-4 files, scrolls for more
+        self.file_queue_textbox = ctk.CTkTextbox(
+            file_frame,
+            height=100,  # Height for 3-4 files, scrollbar appears automatically for more
+            font=ctk.CTkFont(size=11),
+            wrap="none"  # Prevent text wrapping for long filenames
         )
-        self.file_queue_listbox.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=2, pady=2)
+        self.file_queue_textbox.grid(row=1, column=0, sticky=(tk.W, tk.E), padx=10, pady=(0, 10))
 
-        queue_scrollbar = ttk.Scrollbar(queue_container, orient=tk.VERTICAL, command=self.file_queue_listbox.yview)
-        queue_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
-        self.file_queue_listbox.config(yscrollcommand=queue_scrollbar.set)
+        # Store file queue as list (we'll update textbox display)
+        self.file_queue_listbox = None  # Keep for compatibility, will handle differently
 
         # File queue management buttons
-        queue_btn_frame = ttk.Frame(file_frame)
-        queue_btn_frame.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        queue_btn_frame = ctk.CTkFrame(file_frame, fg_color="transparent")
+        queue_btn_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), padx=10, pady=(0, 10))
 
-        self.add_files_button = ttk.Button(queue_btn_frame, text="Add Files", command=self.add_files)
-        self.add_files_button.pack(side=tk.LEFT, padx=(0, 5))
+        self.add_files_button = ctk.CTkButton(queue_btn_frame, text="➕ Add Files", command=self.add_files, width=120)
+        self.add_files_button.pack(side=tk.LEFT, padx=(0, 8))
 
-        self.remove_files_button = ttk.Button(queue_btn_frame, text="Remove Selected", command=self.remove_selected_files)
-        self.remove_files_button.pack(side=tk.LEFT, padx=(0, 5))
+        self.remove_files_button = ctk.CTkButton(queue_btn_frame, text="➖ Remove Selected", command=self.remove_selected_files, width=140)
+        self.remove_files_button.pack(side=tk.LEFT, padx=(0, 8))
 
-        self.clear_queue_button = ttk.Button(queue_btn_frame, text="Clear All", command=self.clear_file_queue)
-        self.clear_queue_button.pack(side=tk.LEFT, padx=(0, 5))
+        self.clear_queue_button = ctk.CTkButton(queue_btn_frame, text="🗑 Clear All", command=self.clear_file_queue, width=100)
+        self.clear_queue_button.pack(side=tk.LEFT, padx=(0, 8))
 
-        self.preview_button = ttk.Button(queue_btn_frame, text="Preview File", command=self.preview_selected_file)
+        self.preview_button = ctk.CTkButton(queue_btn_frame, text="👁 Preview File", command=self.preview_selected_file, width=120, fg_color="#2fa572")
         self.preview_button.pack(side=tk.LEFT)
 
         # File queue
         self.file_queue = []
+        self.file_queue_selection = None
+
+        # Make textbox clickable to select files
+        self.file_queue_textbox.bind("<Button-1>", self._on_file_queue_click)
+
+        # Initialize the display
+        self._update_file_queue_display()
 
         # Database Info Display
-        db_frame = ttk.LabelFrame(main_frame, text="Database Connection", padding="5")
-        db_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        db_frame = ctk.CTkFrame(main_frame)
+        db_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         db_frame.columnconfigure(1, weight=1)
 
-        # Connection selector
-        connection_selector_frame = ttk.Frame(db_frame)
-        connection_selector_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 5))
+        # Frame label
+        ctk.CTkLabel(db_frame, text="Database Connection", font=ctk.CTkFont(size=13, weight="bold")).grid(row=0, column=0, columnspan=2, sticky=tk.W, padx=10, pady=(10, 5))
 
-        ttk.Label(connection_selector_frame, text="Connection:").pack(side=tk.LEFT, padx=(0, 10))
+        # Connection selector
+        connection_selector_frame = ctk.CTkFrame(db_frame, fg_color="transparent")
+        connection_selector_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=10, pady=(0, 10))
+
+        ctk.CTkLabel(connection_selector_frame, text="Connection:").pack(side=tk.LEFT, padx=(0, 10))
 
         self.connection_var = tk.StringVar()
-        self.connection_combo = ttk.Combobox(
+        self.connection_combo = ctk.CTkComboBox(
             connection_selector_frame,
-            textvariable=self.connection_var,
+            variable=self.connection_var,
             state="readonly",
-            width=30
+            width=250
         )
         self.connection_combo.pack(side=tk.LEFT, padx=(0, 10))
 
-        ttk.Button(connection_selector_frame, text="Refresh", command=self.refresh_connections).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(connection_selector_frame, text="Manage...", command=self.manage_connections).pack(side=tk.LEFT)
+        ctk.CTkButton(connection_selector_frame, text="🔄 Refresh", command=self.refresh_connections, width=90).pack(side=tk.LEFT, padx=(0, 8))
+        ctk.CTkButton(connection_selector_frame, text="⚙ Manage", command=self.manage_connections, width=90).pack(side=tk.LEFT)
 
         # Status label
-        self.db_status_label = ttk.Label(db_frame, text="Status: Not connected", foreground="gray")
-        self.db_status_label.grid(row=1, column=0, sticky=tk.W)
+        self.db_status_label = ctk.CTkLabel(db_frame, text="Status: Not connected", text_color="gray")
+        self.db_status_label.grid(row=2, column=0, sticky=tk.W, padx=10, pady=(0, 10))
 
-        ttk.Button(db_frame, text="Test Connection", command=self.test_connection).grid(
-            row=1, column=1, sticky=tk.E
+        ctk.CTkButton(db_frame, text="✓ Test Connection", command=self.test_connection, width=140).grid(
+            row=2, column=1, sticky=tk.E, padx=10, pady=(0, 10)
         )
 
         # Options Section
-        options_frame = ttk.LabelFrame(main_frame, text="Options", padding="5")
-        options_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        options_frame = ctk.CTkFrame(main_frame)
+        options_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+
+        ctk.CTkLabel(options_frame, text="Options", font=ctk.CTkFont(size=13, weight="bold")).grid(row=0, column=0, sticky=tk.W, padx=10, pady=(10, 5))
 
         self.drop_existing_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(
+        ctk.CTkCheckBox(
             options_frame,
-            text="Drop existing tables",
-            variable=self.drop_existing_var
-        ).grid(row=0, column=0, sticky=tk.W)
+            text="Drop existing tables if they exist",
+            variable=self.drop_existing_var,
+            font=ctk.CTkFont(size=12)
+        ).grid(row=1, column=0, sticky=tk.W, padx=10, pady=(0, 10))
 
         # Progress Section
-        progress_frame = ttk.LabelFrame(main_frame, text="Progress", padding="5")
-        progress_frame.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        progress_frame = ctk.CTkFrame(main_frame)
+        progress_frame.grid(row=4, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         progress_frame.columnconfigure(0, weight=1)
 
-        self.progress_var = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(
-            progress_frame,
-            variable=self.progress_var,
-            maximum=100,
-            mode='determinate'
-        )
-        self.progress_bar.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 5))
+        # Progress header with percentage
+        progress_header_frame = ctk.CTkFrame(progress_frame, fg_color="transparent")
+        progress_header_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=10, pady=(10, 5))
+        progress_header_frame.columnconfigure(0, weight=1)
 
-        self.status_label = ttk.Label(progress_frame, text="Ready", foreground="green")
-        self.status_label.grid(row=1, column=0, sticky=tk.W)
+        ctk.CTkLabel(progress_header_frame, text="Progress", font=ctk.CTkFont(size=13, weight="bold")).pack(side=tk.LEFT)
+
+        self.progress_percentage_label = ctk.CTkLabel(
+            progress_header_frame,
+            text="0%",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#1565c0"
+        )
+        self.progress_percentage_label.pack(side=tk.RIGHT)
+
+        # Progress bar
+        self.progress_bar = ctk.CTkProgressBar(
+            progress_frame,
+            mode='determinate',
+            height=20
+        )
+        self.progress_bar.grid(row=1, column=0, sticky=(tk.W, tk.E), padx=10, pady=(0, 8))
+        self.progress_bar.set(0)
+        self.current_progress = 0
+
+        # Status label
+        self.status_label = ctk.CTkLabel(progress_frame, text="Ready", text_color="#2e7d32", font=ctk.CTkFont(size=12, weight="bold"))
+        self.status_label.grid(row=2, column=0, sticky=tk.W, padx=10, pady=(0, 10))
 
         # Log Output Section
-        log_frame = ttk.LabelFrame(main_frame, text="Log Output", padding="5")
-        log_frame.grid(row=5, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 5))
+        log_frame = ctk.CTkFrame(main_frame)
+        log_frame.grid(row=5, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         log_frame.columnconfigure(0, weight=1)
-        log_frame.rowconfigure(0, weight=1)
+        log_frame.rowconfigure(1, weight=1)
         main_frame.rowconfigure(5, weight=3)  # Give more weight to log section
 
-        self.log_text = scrolledtext.ScrolledText(
+        ctk.CTkLabel(log_frame, text="Log Output", font=ctk.CTkFont(size=13, weight="bold")).grid(row=0, column=0, sticky=tk.W, padx=10, pady=(10, 5))
+
+        self.log_text = ctk.CTkTextbox(
             log_frame,
-            height=8,  # Reduced minimum height
-            wrap=tk.WORD,
-            font=("Courier", 9),
-            state='disabled'
+            height=180,  # Fixed height for consistent display
+            wrap="word",
+            font=ctk.CTkFont(family="Courier", size=11)
         )
-        self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.log_text.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=(0, 10))
+        self.log_text.configure(state='disabled')
 
         # Action Buttons
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=6, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        button_frame.grid(row=6, column=0, sticky=(tk.W, tk.E), pady=(0, 0))
         button_frame.columnconfigure(0, weight=1)
 
-        self.convert_button = ttk.Button(
+        self.convert_button = ctk.CTkButton(
             button_frame,
-            text="Convert to Database",
+            text="▶ Convert to Database",
             command=self.start_conversion,
-            style="Accent.TButton"
+            height=40,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#1f6aa5",
+            hover_color="#144870"
         )
         self.convert_button.grid(row=0, column=0, sticky=tk.E, padx=(0, 10))
 
-        self.clear_log_button = ttk.Button(
+        self.clear_log_button = ctk.CTkButton(
             button_frame,
-            text="Clear Log",
-            command=self.clear_log
+            text="🗑 Clear Log",
+            command=self.clear_log,
+            height=40,
+            width=120,
+            fg_color="#666666",
+            hover_color="#555555"
         )
         self.clear_log_button.grid(row=0, column=1, sticky=tk.E)
-
-        # Configure button style
-        style.configure("Accent.TButton", font=("Helvetica", 10, "bold"))
 
         # Start message queue processor
         self.process_queue()
@@ -205,10 +249,69 @@ class FileToDBGUI:
         # Add initial log message
         self.log_message("Application started. Please select a file to begin.")
 
+    def _update_file_queue_display(self):
+        """Update the file queue textbox display"""
+        self.file_queue_textbox.configure(state='normal')
+        self.file_queue_textbox.delete("1.0", tk.END)
+
+        if len(self.file_queue) == 0:
+            self.file_queue_textbox.insert(tk.END, "No files in queue. Click 'Add Files' to begin.")
+        else:
+            for i, filepath in enumerate(self.file_queue):
+                basename = os.path.basename(filepath)
+                prefix = "▶ " if i == self.file_queue_selection else "   "
+                # Show full filename without truncation
+                self.file_queue_textbox.insert(tk.END, f"{prefix}{i+1}. {basename}\n")
+
+        self.file_queue_textbox.configure(state='disabled')
+
+    def _on_file_queue_click(self, event):
+        """Handle click on file queue textbox"""
+        try:
+            # Get the line number that was clicked
+            index = self.file_queue_textbox.index(f"@{event.x},{event.y}")
+            line_num = int(index.split('.')[0]) - 1
+            if 0 <= line_num < len(self.file_queue):
+                self.file_queue_selection = line_num
+                self._update_file_queue_display()
+        except:
+            pass
+
+    def take_screenshot(self):
+        """Take a screenshot of the application window"""
+        try:
+            # Get window position and size
+            x = self.root.winfo_rootx()
+            y = self.root.winfo_rooty()
+            width = self.root.winfo_width()
+            height = self.root.winfo_height()
+
+            # Capture the window
+            screenshot = ImageGrab.grab(bbox=(x, y, x + width, y + height))
+
+            # Create screenshots directory if it doesn't exist
+            screenshot_dir = "screenshots"
+            if not os.path.exists(screenshot_dir):
+                os.makedirs(screenshot_dir)
+
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = os.path.join(screenshot_dir, f"screenshot_{timestamp}.png")
+
+            # Save screenshot
+            screenshot.save(filename)
+
+            self.log_message(f"Screenshot saved: {filename}", "SUCCESS")
+            messagebox.showinfo("Screenshot Saved", f"Screenshot saved to:\n{filename}")
+        except Exception as e:
+            error_msg = f"Failed to take screenshot: {e}"
+            self.log_message(error_msg, "ERROR")
+            messagebox.showerror("Screenshot Error", error_msg)
+
     def refresh_connections(self):
         """Refresh the list of available connections"""
         connections = get_available_connections()
-        self.connection_combo['values'] = connections
+        self.connection_combo.configure(values=connections)
 
         if connections:
             if not self.connection_var.get() or self.connection_var.get() not in connections:
@@ -243,16 +346,14 @@ class FileToDBGUI:
                 if filename not in self.file_queue:
                     self.file_queue.append(filename)
                     basename = os.path.basename(filename)
-                    self.file_queue_listbox.insert(tk.END, basename)
-                    self.log_message(f"Added to listbox: {basename}", "INFO")
+                    self.log_message(f"Added: {basename}", "INFO")
                     added_count += 1
                 else:
                     self.log_message(f"Skipped duplicate: {os.path.basename(filename)}", "INFO")
 
             if added_count > 0:
                 self.log_message(f"Added {added_count} file(s) to queue. Total: {len(self.file_queue)}")
-                # Force listbox update
-                self.file_queue_listbox.update()
+                self._update_file_queue_display()
             else:
                 self.log_message("No new files added (duplicates skipped)", "INFO")
         else:
@@ -260,19 +361,18 @@ class FileToDBGUI:
 
     def remove_selected_files(self):
         """Remove selected files from queue"""
-        selected_indices = self.file_queue_listbox.curselection()
-        if not selected_indices:
+        if self.file_queue_selection is None:
             self.log_message("No files selected for removal", "INFO")
+            messagebox.showinfo("No Selection", "Please click on a file to select it for removal")
             return
 
-        # Remove in reverse order to maintain correct indices
-        for index in reversed(selected_indices):
-            filename = self.file_queue[index]
-            self.file_queue.pop(index)
-            self.file_queue_listbox.delete(index)
+        if self.file_queue_selection < len(self.file_queue):
+            filename = self.file_queue[self.file_queue_selection]
+            self.file_queue.pop(self.file_queue_selection)
             self.log_message(f"Removed: {os.path.basename(filename)}")
-
-        self.log_message(f"Files remaining in queue: {len(self.file_queue)}")
+            self.file_queue_selection = None
+            self._update_file_queue_display()
+            self.log_message(f"Files remaining in queue: {len(self.file_queue)}")
 
     def clear_file_queue(self):
         """Clear all files from queue"""
@@ -282,19 +382,22 @@ class FileToDBGUI:
 
         count = len(self.file_queue)
         self.file_queue.clear()
-        self.file_queue_listbox.delete(0, tk.END)
+        self.file_queue_selection = None
+        self._update_file_queue_display()
         self.column_overrides.clear()
         self.log_message(f"Cleared {count} file(s) from queue")
 
     def preview_selected_file(self):
         """Open preview dialog for selected file"""
-        selected_indices = self.file_queue_listbox.curselection()
-        if not selected_indices:
+        if self.file_queue_selection is None:
             self.log_message("No file selected for preview", "INFO")
-            messagebox.showinfo("No Selection", "Please select a file to preview")
+            messagebox.showinfo("No Selection", "Please click on a file to select it for preview")
             return
 
-        file_index = selected_indices[0]
+        file_index = self.file_queue_selection
+        if file_index >= len(self.file_queue):
+            return
+
         file_path = self.file_queue[file_index]
 
         if not os.path.exists(file_path):
@@ -311,42 +414,47 @@ class FileToDBGUI:
         formatted_message = f"[{timestamp}] {level}: {message}\n"
 
         # Temporarily enable editing to insert text
-        self.log_text.config(state='normal')
+        self.log_text.configure(state='normal')
 
-        # Color coding based on level
+        # Insert text (CTkTextbox doesn't support tags like regular Text widget)
         self.log_text.insert(tk.END, formatted_message)
-
-        if level == "ERROR":
-            # Find the line we just inserted and tag it
-            line_start = self.log_text.index("end-2c linestart")
-            line_end = self.log_text.index("end-1c")
-            self.log_text.tag_add("error", line_start, line_end)
-            self.log_text.tag_config("error", foreground="red")
-        elif level == "SUCCESS":
-            line_start = self.log_text.index("end-2c linestart")
-            line_end = self.log_text.index("end-1c")
-            self.log_text.tag_add("success", line_start, line_end)
-            self.log_text.tag_config("success", foreground="green", font=("Courier", 9, "bold"))
-
         self.log_text.see(tk.END)
 
         # Disable editing again
-        self.log_text.config(state='disabled')
+        self.log_text.configure(state='disabled')
+
+        # Also log to Python logger
+        if level == "ERROR":
+            logger.error(message)
+        elif level == "SUCCESS":
+            logger.info(f"SUCCESS: {message}")
+        else:
+            logger.info(message)
 
     def clear_log(self):
         """Clear the log text widget"""
-        self.log_text.config(state='normal')
-        self.log_text.delete(1.0, tk.END)
-        self.log_text.config(state='disabled')
+        self.log_text.configure(state='normal')
+        self.log_text.delete("1.0", tk.END)
+        self.log_text.configure(state='disabled')
         self.log_message("Log cleared")
 
     def update_status(self, message, color="black"):
         """Update status label"""
-        self.status_label.config(text=message, foreground=color)
+        # Map common color names to more visible colors in light mode
+        color_map = {
+            "green": "#2e7d32",  # Darker green for better visibility
+            "blue": "#1565c0",   # Darker blue
+            "red": "#c62828",    # Darker red
+            "black": "#000000"
+        }
+        actual_color = color_map.get(color, color)
+        self.status_label.configure(text=message, text_color=actual_color)
 
     def update_progress(self, value):
-        """Update progress bar"""
-        self.progress_var.set(value)
+        """Update progress bar and percentage label"""
+        self.current_progress = value
+        self.progress_bar.set(value / 100)  # CTkProgressBar expects 0.0 to 1.0
+        self.progress_percentage_label.configure(text=f"{int(value)}%")
 
     def test_connection(self):
         """Test database connection"""
@@ -364,11 +472,11 @@ class FileToDBGUI:
                 conn.close()
                 self.message_queue.put(("log", f"Database connection '{connection_name}' successful!", "SUCCESS"))
                 self.message_queue.put(("status", "Connected", "green"))
-                self.message_queue.put(("db_status", "Status: Connected ✓", "green"))
+                self.message_queue.put(("db_status", "Status: Connected", "green"))
             except Exception as e:
                 self.message_queue.put(("log", f"Connection failed: {e}", "ERROR"))
                 self.message_queue.put(("status", "Connection failed", "red"))
-                self.message_queue.put(("db_status", "Status: Connection failed ✗", "red"))
+                self.message_queue.put(("db_status", "Status: Connection failed", "red"))
 
         threading.Thread(target=test, daemon=True).start()
 
@@ -394,10 +502,10 @@ class FileToDBGUI:
             return
 
         # Disable buttons during conversion
-        self.convert_button.config(state="disabled")
-        self.add_files_button.config(state="disabled")
-        self.remove_files_button.config(state="disabled")
-        self.clear_queue_button.config(state="disabled")
+        self.convert_button.configure(state="disabled")
+        self.add_files_button.configure(state="disabled")
+        self.remove_files_button.configure(state="disabled")
+        self.clear_queue_button.configure(state="disabled")
 
         # Reset progress
         self.update_progress(0)
@@ -464,11 +572,11 @@ class FileToDBGUI:
                         sheet_progress = int(file_progress_range * (0.2 + 0.7 * (idx + 1) / total_sheets))
                         self.message_queue.put(("progress", file_progress_start + sheet_progress))
 
-                    self.message_queue.put(("log", f"  ✓ {filename} completed successfully", "SUCCESS"))
+                    self.message_queue.put(("log", f"  [SUCCESS] {filename} completed successfully", "SUCCESS"))
                     successful_files += 1
 
                 except Exception as e:
-                    self.message_queue.put(("log", f"  ✗ Failed to process {filename}: {e}", "ERROR"))
+                    self.message_queue.put(("log", f"  [ERROR] Failed to process {filename}: {e}", "ERROR"))
                     failed_files.append((filename, str(e)))
                     # Continue with next file
 
@@ -543,7 +651,7 @@ class FileToDBGUI:
 
                 create_table_from_dataframe(df, table_name, cursor, column_name_map, column_type_map)
 
-                self.message_queue.put(("log", f"✓ Table '{table_name}' created successfully", "SUCCESS"))
+                self.message_queue.put(("log", f"[SUCCESS] Table '{table_name}' created successfully", "SUCCESS"))
                 current_progress = int(30 + ((idx + 1) * progress_per_sheet))
                 self.message_queue.put(("progress", current_progress))
 
@@ -551,7 +659,7 @@ class FileToDBGUI:
             conn.close()
 
             self.message_queue.put(("progress", 100))
-            self.message_queue.put(("log", f"✓ All {total_sheets} table(s) created successfully!", "SUCCESS"))
+            self.message_queue.put(("log", f"[SUCCESS] All {total_sheets} table(s) created successfully!", "SUCCESS"))
             self.message_queue.put(("status", "Conversion completed!", "green"))
             self.message_queue.put(("enable_buttons", None))
             self.message_queue.put(("show_success", f"Successfully created {total_sheets} table(s)!"))
@@ -597,15 +705,15 @@ class FileToDBGUI:
                 elif msg_type == "db_status":
                     if len(msg) == 3:
                         # 3-tuple: ("db_status", text, color)
-                        self.db_status_label.config(text=msg_data, foreground=msg_extra)
+                        self.db_status_label.configure(text=msg_data, text_color=msg_extra)
                     else:
-                        self.db_status_label.config(text=msg_data)
+                        self.db_status_label.configure(text=msg_data)
 
                 elif msg_type == "enable_buttons":
-                    self.convert_button.config(state="normal")
-                    self.add_files_button.config(state="normal")
-                    self.remove_files_button.config(state="normal")
-                    self.clear_queue_button.config(state="normal")
+                    self.convert_button.configure(state="normal")
+                    self.add_files_button.configure(state="normal")
+                    self.remove_files_button.configure(state="normal")
+                    self.clear_queue_button.configure(state="normal")
 
                 elif msg_type == "show_success":
                     messagebox.showinfo("Success", msg_data)

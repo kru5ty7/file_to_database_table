@@ -4,6 +4,7 @@ Data Preview Dialog - Preview and edit file data before import
 
 import tkinter as tk
 from tkinter import ttk, messagebox
+import customtkinter as ctk
 import pandas as pd
 import os
 from src.file_processor import get_dataframes, infer_column_type
@@ -16,7 +17,7 @@ class DataPreviewDialog:
         self.file_path = file_path
         self.filename = os.path.basename(file_path)
 
-        self.dialog = tk.Toplevel(parent)
+        self.dialog = ctk.CTkToplevel(parent)
         self.dialog.title(f"Data Preview - {self.filename}")
         self.dialog.geometry("1200x800")
         self.dialog.transient(parent)
@@ -37,8 +38,8 @@ class DataPreviewDialog:
             self.main_app.column_overrides[file_path] = {}
 
         # Main frame
-        main_frame = ttk.Frame(self.dialog, padding="10")
-        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        main_frame = ctk.CTkFrame(self.dialog)
+        main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
         self.dialog.columnconfigure(0, weight=1)
         self.dialog.rowconfigure(0, weight=1)
         main_frame.columnconfigure(0, weight=1)
@@ -46,37 +47,37 @@ class DataPreviewDialog:
 
         # Sheet selector (if multiple sheets)
         if len(self.dataframes) > 1:
-            sheet_frame = ttk.Frame(main_frame)
+            sheet_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
             sheet_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
 
-            ttk.Label(sheet_frame, text="Sheet:", font=("Helvetica", 10, "bold")).pack(side=tk.LEFT, padx=(0, 10))
+            ctk.CTkLabel(sheet_frame, text="Sheet:", font=ctk.CTkFont(size=12, weight="bold")).pack(side=tk.LEFT, padx=(0, 10))
 
             self.sheet_var = tk.StringVar(value=list(self.dataframes.keys())[0])
-            sheet_combo = ttk.Combobox(
+            sheet_combo = ctk.CTkComboBox(
                 sheet_frame,
-                textvariable=self.sheet_var,
+                variable=self.sheet_var,
                 values=list(self.dataframes.keys()),
                 state="readonly",
-                width=30
+                width=250,
+                command=lambda choice: self.load_sheet()
             )
             sheet_combo.pack(side=tk.LEFT)
-            sheet_combo.bind('<<ComboboxSelected>>', lambda e: self.load_sheet())
         else:
             self.sheet_var = tk.StringVar(value=list(self.dataframes.keys())[0])
 
         # Content frame (will hold stats and data grid)
-        self.content_frame = ttk.Frame(main_frame)
+        self.content_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         self.content_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         self.content_frame.columnconfigure(0, weight=1)
         self.content_frame.rowconfigure(1, weight=1)
 
         # Bottom buttons
-        button_frame = ttk.Frame(main_frame)
+        button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
         button_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
 
-        ttk.Button(button_frame, text="Apply Changes", command=self.apply_changes).pack(side=tk.RIGHT, padx=(5, 0))
-        ttk.Button(button_frame, text="Cancel", command=self.cancel).pack(side=tk.RIGHT)
-        ttk.Button(button_frame, text="Reset to Defaults", command=self.reset_defaults).pack(side=tk.LEFT)
+        ctk.CTkButton(button_frame, text="✓ Apply Changes", command=self.apply_changes, fg_color="#2fa572", hover_color="#26734f", width=140).pack(side=tk.RIGHT, padx=(8, 0))
+        ctk.CTkButton(button_frame, text="✗ Cancel", command=self.cancel, fg_color="#666666", hover_color="#555555", width=100).pack(side=tk.RIGHT)
+        ctk.CTkButton(button_frame, text="🔄 Reset to Defaults", command=self.reset_defaults, width=160).pack(side=tk.LEFT)
 
         # Load first sheet
         self.load_sheet()
@@ -95,9 +96,12 @@ class DataPreviewDialog:
         self.column_type_vars = {}
 
         # Statistics frame
-        stats_frame = ttk.LabelFrame(self.content_frame, text="Statistics", padding="10")
+        stats_frame = ctk.CTkFrame(self.content_frame)
         stats_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         stats_frame.columnconfigure(1, weight=1)
+
+        # Frame label
+        ctk.CTkLabel(stats_frame, text="Statistics", font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, columnspan=3, sticky=tk.W, padx=10, pady=(10, 5))
 
         # Display statistics
         row_count = len(df)
@@ -105,31 +109,31 @@ class DataPreviewDialog:
         null_counts = df.isna().sum()
         total_nulls = null_counts.sum()
 
-        ttk.Label(stats_frame, text=f"Rows: {row_count:,}", font=("Courier", 10, "bold")).grid(row=0, column=0, sticky=tk.W, padx=(0, 20))
-        ttk.Label(stats_frame, text=f"Columns: {col_count}", font=("Courier", 10, "bold")).grid(row=0, column=1, sticky=tk.W, padx=(0, 20))
-        ttk.Label(stats_frame, text=f"Total NULL values: {total_nulls:,}", font=("Courier", 10, "bold")).grid(row=0, column=2, sticky=tk.W)
+        ctk.CTkLabel(stats_frame, text=f"Rows: {row_count:,}", font=ctk.CTkFont(family="Courier", size=11, weight="bold")).grid(row=1, column=0, sticky=tk.W, padx=10, pady=(0, 10))
+        ctk.CTkLabel(stats_frame, text=f"Columns: {col_count}", font=ctk.CTkFont(family="Courier", size=11, weight="bold")).grid(row=1, column=1, sticky=tk.W, padx=20, pady=(0, 10))
+        ctk.CTkLabel(stats_frame, text=f"NULL values: {total_nulls:,}", font=ctk.CTkFont(family="Courier", size=11, weight="bold"), text_color="orange" if total_nulls > 0 else "green").grid(row=1, column=2, sticky=tk.W, pady=(0, 10))
 
         # Preview frame with scrollable area
-        preview_frame = ttk.LabelFrame(self.content_frame, text=f"Data Preview (First 20 rows) - Sheet: {sheet_name}", padding="10")
-        preview_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        preview_frame.columnconfigure(0, weight=1)
-        preview_frame.rowconfigure(0, weight=1)
+        preview_container = ctk.CTkFrame(self.content_frame)
+        preview_container.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        preview_container.columnconfigure(0, weight=1)
+        preview_container.rowconfigure(1, weight=1)
 
-        # Create canvas and scrollbars for scrollable content
-        canvas = tk.Canvas(preview_frame, bg='white')
-        canvas.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        # Frame label
+        ctk.CTkLabel(preview_container, text=f"Data Preview (First 20 rows) - Sheet: {sheet_name}", font=ctk.CTkFont(size=12, weight="bold")).grid(row=0, column=0, sticky=tk.W, padx=10, pady=(10, 5))
 
-        h_scrollbar = ttk.Scrollbar(preview_frame, orient=tk.HORIZONTAL, command=canvas.xview)
-        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        # Create scrollable frame for data
+        scrollable_frame = ctk.CTkScrollableFrame(
+            preview_container,
+            orientation="horizontal",
+            label_text="",
+            height=500  # Fixed height to ensure visibility
+        )
+        scrollable_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=(0, 10))
 
-        v_scrollbar = ttk.Scrollbar(preview_frame, orient=tk.VERTICAL, command=canvas.yview)
-        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
-
-        canvas.config(xscrollcommand=h_scrollbar.set, yscrollcommand=v_scrollbar.set)
-
-        # Inner frame for content
-        inner_frame = ttk.Frame(canvas)
-        canvas_window = canvas.create_window((0, 0), window=inner_frame, anchor=tk.NW)
+        # Inner container for all columns
+        inner_container = ctk.CTkFrame(scrollable_frame, fg_color="transparent")
+        inner_container.pack(fill=tk.BOTH, expand=True)
 
         # Get existing overrides for this sheet
         sheet_overrides = self.main_app.column_overrides.get(self.file_path, {}).get(sheet_name, {})
@@ -143,68 +147,86 @@ class DataPreviewDialog:
         # Display first 20 rows
         preview_df = df.head(20)
 
-        # Fixed column width for alignment
-        col_width = 150
+        # Handle empty dataframe
+        if len(preview_df) == 0:
+            ctk.CTkLabel(
+                inner_container,
+                text="No data rows in this sheet",
+                font=ctk.CTkFont(size=12),
+                text_color="orange"
+            ).pack(pady=20)
+            return
 
+        # Create grid layout for columns
         for col_idx, col_name in enumerate(df.columns):
             # Create a container frame for each column (header + data)
-            column_container = ttk.Frame(inner_frame)
-            column_container.grid(row=0, column=col_idx, sticky=(tk.N, tk.S), padx=2)
+            column_container = ctk.CTkFrame(inner_container, corner_radius=5, width=180)
+            column_container.grid(row=0, column=col_idx, sticky=(tk.N, tk.S), padx=3, pady=3)
+            # Allow container to expand vertically for data cells
+            column_container.grid_rowconfigure(list(range(len(preview_df) + 1)), weight=0)
+            column_container.grid_columnconfigure(0, weight=1)
 
             # Header section with edit controls
-            col_frame = ttk.Frame(column_container, relief=tk.RIDGE, borderwidth=1)
-            col_frame.pack(fill=tk.X, pady=(0, 2))
+            col_frame = ctk.CTkFrame(column_container, fg_color=("#E8E8E8", "#2B2B2B"))
+            col_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=2, pady=2)
 
             # Column name editor
-            ttk.Label(col_frame, text="Column Name:", font=("Arial", 8)).pack(anchor=tk.W, padx=2, pady=(2, 0))
+            ctk.CTkLabel(col_frame, text="Column Name:", font=ctk.CTkFont(size=9)).pack(anchor=tk.W, padx=5, pady=(5, 0))
             name_var = tk.StringVar(value=column_name_overrides.get(col_name, col_name))
-            name_entry = ttk.Entry(col_frame, textvariable=name_var, width=20, font=("Arial", 9))
-            name_entry.pack(fill=tk.X, padx=2, pady=(0, 5))
+            name_entry = ctk.CTkEntry(col_frame, textvariable=name_var, width=160, height=28, font=ctk.CTkFont(size=10))
+            name_entry.pack(fill=tk.X, padx=5, pady=(2, 5))
             self.column_name_vars[col_name] = name_var
 
             # Detected type display
             detected_type = infer_column_type(df[col_name], col_name)
-            ttk.Label(col_frame, text=f"Detected: {detected_type}", font=("Arial", 8), foreground="gray").pack(anchor=tk.W, padx=2)
+            ctk.CTkLabel(col_frame, text=f"Detected: {detected_type}", font=ctk.CTkFont(size=9), text_color="gray").pack(anchor=tk.W, padx=5)
 
             # Type selector
-            ttk.Label(col_frame, text="SQL Type:", font=("Arial", 8)).pack(anchor=tk.W, padx=2, pady=(5, 0))
+            ctk.CTkLabel(col_frame, text="SQL Type:", font=ctk.CTkFont(size=9)).pack(anchor=tk.W, padx=5, pady=(3, 0))
             type_var = tk.StringVar(value=column_type_overrides.get(col_name, detected_type))
-            type_combo = ttk.Combobox(col_frame, textvariable=type_var, values=sql_types, state="readonly", width=18, font=("Arial", 8))
-            type_combo.pack(fill=tk.X, padx=2, pady=(0, 5))
+            type_menu = ctk.CTkOptionMenu(
+                col_frame,
+                variable=type_var,
+                values=sql_types,
+                width=160,
+                height=28,
+                font=ctk.CTkFont(size=9),
+                dropdown_font=ctk.CTkFont(size=9)
+            )
+            type_menu.pack(fill=tk.X, padx=5, pady=(2, 5))
             self.column_type_vars[col_name] = type_var
 
             # NULL count for this column
             null_count = null_counts[col_name]
             null_pct = (null_count / row_count * 100) if row_count > 0 else 0
-            ttk.Label(col_frame, text=f"NULLs: {null_count} ({null_pct:.1f}%)", font=("Arial", 7), foreground="red" if null_count > 0 else "green").pack(anchor=tk.W, padx=2, pady=(0, 2))
+            null_color = "#c62828" if null_count > 0 else "#2e7d32"
+            ctk.CTkLabel(col_frame, text=f"NULLs: {null_count} ({null_pct:.1f}%)", font=ctk.CTkFont(size=9), text_color=null_color).pack(anchor=tk.W, padx=5, pady=(0, 5))
 
             # Data cells for this column
             for row_idx, value in enumerate(preview_df[col_name]):
-                cell_frame = ttk.Frame(column_container, relief=tk.SOLID, borderwidth=1)
-                cell_frame.pack(fill=tk.X, pady=1)
-
                 # Format value
                 if pd.isna(value):
                     display_value = "NULL"
-                    fg_color = "gray"
+                    text_color = "gray"
                 else:
                     display_value = str(value)
-                    if len(display_value) > 30:
-                        display_value = display_value[:27] + "..."
-                    fg_color = "black"
+                    if len(display_value) > 25:
+                        display_value = display_value[:22] + "..."
+                    text_color = None  # Use default color
 
-                label = tk.Label(cell_frame, text=display_value, font=("Courier", 8), anchor=tk.W, fg=fg_color, bg="white", padx=5, pady=2, width=20)
-                label.pack(fill=tk.BOTH, expand=True)
-
-        # Update scroll region
-        inner_frame.update_idletasks()
-        canvas.config(scrollregion=canvas.bbox("all"))
-
-        # Configure canvas resize
-        def configure_canvas(event):
-            canvas.config(scrollregion=canvas.bbox("all"))
-
-        inner_frame.bind("<Configure>", configure_canvas)
+                # Create label directly (simpler approach)
+                cell_label = ctk.CTkLabel(
+                    column_container,
+                    text=display_value,
+                    font=ctk.CTkFont(family="Courier", size=9),
+                    anchor="w",
+                    text_color=text_color,
+                    fg_color=("#F5F5F5", "#3B3B3B"),
+                    corner_radius=3,
+                    height=24,
+                    padx=5
+                )
+                cell_label.grid(row=row_idx+1, column=0, sticky=(tk.W, tk.E), padx=2, pady=1)
 
     def apply_changes(self):
         """Apply column name and type overrides"""
