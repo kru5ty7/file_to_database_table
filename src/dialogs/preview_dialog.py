@@ -16,16 +16,23 @@ class DataPreviewDialog:
         self.main_app = main_app
         self.file_path = file_path
         self.filename = os.path.basename(file_path)
+        self.is_csv = file_path.lower().endswith('.csv')
 
         self.dialog = ctk.CTkToplevel(parent)
         self.dialog.title(f"Data Preview - {self.filename}")
         self.dialog.geometry("1200x800")
-        self.dialog.transient(parent)
+
+        # Enable minimize and maximize buttons (remove transient to allow window controls)
+        # self.dialog.transient(parent)  # Commented out to enable min/max buttons
+        self.dialog.resizable(True, True)  # Allow window resizing
         self.dialog.grab_set()
+
+        # Get delimiter preference for CSV files
+        self.current_delimiter = self.main_app.csv_delimiters.get(file_path, ',')
 
         # Load file data
         try:
-            self.dataframes = get_dataframes(file_path)
+            self.dataframes = get_dataframes(file_path, delimiter=self.current_delimiter)
             self.main_app.log_message(f"Loaded {len(self.dataframes)} sheet(s) from {self.filename}", "INFO")
         except Exception as e:
             self.main_app.log_message(f"Failed to load file: {e}", "ERROR")
@@ -45,10 +52,38 @@ class DataPreviewDialog:
         main_frame.columnconfigure(0, weight=1)
         main_frame.rowconfigure(1, weight=1)
 
+        # Delimiter selector for CSV files (row 0)
+        current_row = 0
+        if self.is_csv:
+            delimiter_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+            delimiter_frame.grid(row=current_row, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+            current_row += 1
+
+            ctk.CTkLabel(delimiter_frame, text="CSV Delimiter:", font=ctk.CTkFont(size=12, weight="bold")).pack(side=tk.LEFT, padx=(0, 10))
+
+            self.delimiter_var = tk.StringVar(value=self.current_delimiter)
+            delimiter_options = [
+                (",", "Comma (,)"),
+                (";", "Semicolon (;)"),
+                ("\t", "Tab"),
+                ("|", "Pipe (|)"),
+                (" ", "Space")
+            ]
+
+            for delim_char, delim_label in delimiter_options:
+                ctk.CTkRadioButton(
+                    delimiter_frame,
+                    text=delim_label,
+                    variable=self.delimiter_var,
+                    value=delim_char,
+                    command=self.reload_with_delimiter
+                ).pack(side=tk.LEFT, padx=5)
+
         # Sheet selector (if multiple sheets)
         if len(self.dataframes) > 1:
             sheet_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-            sheet_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+            sheet_frame.grid(row=current_row, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
+            current_row += 1
 
             ctk.CTkLabel(sheet_frame, text="Sheet:", font=ctk.CTkFont(size=12, weight="bold")).pack(side=tk.LEFT, padx=(0, 10))
 
@@ -67,13 +102,14 @@ class DataPreviewDialog:
 
         # Content frame (will hold stats and data grid)
         self.content_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-        self.content_frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.content_frame.grid(row=current_row, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        current_row += 1
         self.content_frame.columnconfigure(0, weight=1)
         self.content_frame.rowconfigure(1, weight=1)
 
         # Bottom buttons
         button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
-        button_frame.grid(row=2, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
+        button_frame.grid(row=current_row, column=0, sticky=(tk.W, tk.E), pady=(10, 0))
 
         ctk.CTkButton(button_frame, text="✓ Apply Changes", command=self.apply_changes, fg_color="#2fa572", hover_color="#26734f", width=140).pack(side=tk.RIGHT, padx=(8, 0))
         ctk.CTkButton(button_frame, text="✗ Cancel", command=self.cancel, fg_color="#666666", hover_color="#555555", width=100).pack(side=tk.RIGHT)
@@ -228,6 +264,31 @@ class DataPreviewDialog:
                 )
                 cell_label.grid(row=row_idx+1, column=0, sticky=(tk.W, tk.E), padx=2, pady=1)
 
+    def reload_with_delimiter(self):
+        """Reload CSV file with new delimiter"""
+        if not self.is_csv:
+            return
+
+        new_delimiter = self.delimiter_var.get()
+        if new_delimiter == self.current_delimiter:
+            return
+
+        self.current_delimiter = new_delimiter
+        self.main_app.log_message(f"Reloading {self.filename} with delimiter: '{new_delimiter}'", "INFO")
+
+        try:
+            # Reload dataframes with new delimiter
+            self.dataframes = get_dataframes(self.file_path, delimiter=new_delimiter)
+            self.main_app.log_message(f"Reloaded with new delimiter successfully", "SUCCESS")
+
+            # Reload the current sheet display
+            self.load_sheet()
+        except Exception as e:
+            self.main_app.log_message(f"Failed to reload with new delimiter: {e}", "ERROR")
+            messagebox.showerror("Error", f"Failed to reload file with new delimiter:\n{e}")
+            # Revert to previous delimiter
+            self.delimiter_var.set(self.current_delimiter)
+
     def apply_changes(self):
         """Apply column name and type overrides"""
         sheet_name = self.sheet_var.get()
@@ -255,6 +316,11 @@ class DataPreviewDialog:
             'columns': column_name_map,
             'types': column_type_map
         }
+
+        # Save CSV delimiter preference
+        if self.is_csv:
+            self.main_app.csv_delimiters[self.file_path] = self.current_delimiter
+            self.main_app.log_message(f"Saved delimiter preference: '{self.current_delimiter}'", "INFO")
 
         self.main_app.log_message(f"Applied overrides for sheet '{sheet_name}': {len(column_name_map)} column renames, {len(column_type_map)} type overrides", "SUCCESS")
 

@@ -45,6 +45,9 @@ class FileToDBGUI:
         # Store column overrides: {file_path: {sheet_name: {'columns': {old_name: new_name}, 'types': {col_name: type}}}}
         self.column_overrides = {}
 
+        # Store CSV delimiter preferences: {file_path: delimiter}
+        self.csv_delimiters = {}
+
         # Main container with scrollbar support
         main_frame = ctk.CTkFrame(root)
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
@@ -542,7 +545,9 @@ class FileToDBGUI:
 
                     # Read file
                     self.message_queue.put(("progress", file_progress_start + int(file_progress_range * 0.1)))
-                    dataframes = get_dataframes(file_path)
+                    # Get delimiter preference for CSV files
+                    delimiter = self.csv_delimiters.get(file_path, ',')
+                    dataframes = get_dataframes(file_path, delimiter=delimiter)
                     self.message_queue.put(("log", f"  Found {len(dataframes)} sheet(s)", "INFO"))
 
                     # Process each sheet
@@ -621,7 +626,9 @@ class FileToDBGUI:
             self.message_queue.put(("log", f"Reading file: {file_path}", "INFO"))
             self.message_queue.put(("progress", 10))
 
-            dataframes = get_dataframes(file_path)
+            # Get delimiter preference for CSV files
+            delimiter = self.csv_delimiters.get(file_path, ',')
+            dataframes = get_dataframes(file_path, delimiter=delimiter)
             self.message_queue.put(("log", f"Found {len(dataframes)} sheet(s)", "INFO"))
             self.message_queue.put(("progress", 20))
 

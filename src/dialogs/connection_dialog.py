@@ -17,7 +17,10 @@ class ConnectionManagerDialog:
         self.dialog = ctk.CTkToplevel(parent)
         self.dialog.title("Manage Database Connections")
         self.dialog.geometry("800x550")
-        self.dialog.transient(parent)
+
+        # Enable minimize and maximize buttons (remove transient to allow window controls)
+        # self.dialog.transient(parent)  # Commented out to enable min/max buttons
+        self.dialog.resizable(True, True)  # Allow window resizing
         self.dialog.grab_set()
 
         # Load config

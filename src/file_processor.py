@@ -6,20 +6,24 @@ import pandas as pd
 import os
 from .utils import sanitize_name, logger
 
-def get_dataframes(file_path):
+def get_dataframes(file_path, delimiter=','):
     """
     Read file and return a dictionary of dataframes.
     For CSV: returns {'sheet1': dataframe}
     For Excel: returns {sheet_name: dataframe} for each sheet
+
+    Args:
+        file_path: Path to the file to read
+        delimiter: Delimiter for CSV files (default: ',')
     """
     logger.info(f"Reading file: {file_path}")
     _, file_extension = os.path.splitext(file_path)
     dataframes = {}
 
     if file_extension.lower() == '.csv':
-        logger.debug("File type: CSV")
+        logger.debug(f"File type: CSV (delimiter: '{delimiter}')")
         # Read CSV with all columns as strings to preserve formatting
-        df = pd.read_csv(file_path, dtype=str, keep_default_na=False)
+        df = pd.read_csv(file_path, dtype=str, keep_default_na=False, delimiter=delimiter)
         logger.info(f"CSV loaded: {len(df)} rows, {len(df.columns)} columns")
         # Replace empty strings with NaN for proper NULL handling
         df = df.replace('', pd.NA)
