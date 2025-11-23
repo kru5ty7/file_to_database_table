@@ -1,0 +1,91 @@
+name: Build and Release Executable
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0, v1.2.3, etc.
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install uv
+      run: |
+        pip install uv
+
+    - name: Install dependencies
+      run: |
+        uv pip install --system pyinstaller
+        uv pip install --system -r requirements.txt
+
+    - name: Build executable with PyInstaller
+      run: |
+        pyinstaller FileToDBConverter.spec
+
+    - name: Get version from tag
+      id: get_version
+      shell: bash
+      run: |
+        if [[ $GITHUB_REF == refs/tags/* ]]; then
+          VERSION=${GITHUB_REF#refs/tags/}
+        else
+          VERSION="dev-$(date +'%Y%m%d-%H%M%S')"
+        fi
+        echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Create release archive
+      shell: bash
+      run: |
+        cd dist
+        7z a FileToDBConverter-${{ steps.get_version.outputs.VERSION }}-windows.zip FileToDBConverter.exe
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: FileToDBConverter-Windows
+        path: dist/FileToDBConverter-*.zip
+        retention-days: 30
+
+    - name: Create GitHub Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/FileToDBConverter-*.zip
+        draft: false
+        prerelease: false
+        body: |
+          ## File to Database Table Converter ${{ steps.get_version.outputs.VERSION }}
+
+          ### Features
+          - Convert CSV and Excel files to SQL Server tables
+          - Preview data before import with column editing
+          - Customize column names and data types
+          - Batch file processing
+          - Database connection management
+
+          ### Installation
+          1. Download the ZIP file below
+          2. Extract `FileToDBConverter.exe`
+          3. Run the executable - no Python installation required!
+
+          ### Requirements
+          - Windows 10/11
+          - SQL Server with ODBC Driver 17+ installed
+
+          ### Usage
+          1. Click "Add Files" to select CSV/Excel files
+          2. Click "Preview File" to review and customize columns
+          3. Configure database connection
+          4. Click "Convert to Database" to import
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
