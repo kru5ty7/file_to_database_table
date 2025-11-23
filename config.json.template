@@ -1,7 +1,26 @@
 {
-    "server": "your_server_name",
-    "database": "your_database_name",
-    "username": "your_username",
-    "password": "your_password",
-    "driver": "{ODBC Driver 17 for SQL Server}"
+    "default_connection": "production",
+    "connections": {
+        "production": {
+            "server": "your_server_name",
+            "database": "your_database_name",
+            "username": "your_username",
+            "password": "your_password",
+            "driver": "{ODBC Driver 17 for SQL Server}"
+        },
+        "development": {
+            "server": "dev_server_name",
+            "database": "dev_database_name",
+            "username": "dev_username",
+            "password": "dev_password",
+            "driver": "{ODBC Driver 17 for SQL Server}"
+        },
+        "test": {
+            "server": "test_server_name",
+            "database": "test_database_name",
+            "username": "test_username",
+            "password": "test_password",
+            "driver": "{ODBC Driver 17 for SQL Server}"
+        }
+    }
 }

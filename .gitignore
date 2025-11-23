@@ -5,6 +5,10 @@ __pycache__/
 *.so
 .Python
 
+# Logs
+logs/
+*.log
+
 # Virtual environments
 venv/
 env/
@@ -13,6 +17,10 @@ ENV/
 
 # uv
 .uv/
+
+# Encryption key and config
+.encryption_key
+config.json
 uv.lock
 
 # IDEs
