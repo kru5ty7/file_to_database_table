@@ -58,11 +58,12 @@ jobs:
 
     - name: Create GitHub Release
       if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         files: dist/FileToDBConverter-*.zip
         draft: false
         prerelease: false
+        generate_release_notes: true
         body: |
           ## File to Database Table Converter ${{ steps.get_version.outputs.VERSION }}
 
