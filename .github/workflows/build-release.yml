@@ -63,10 +63,13 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
-        files: dist/FileToDBConverter-*.zip
+        files: |
+          dist/FileToDBConverter-*.zip
+          dist/FileToDBConverter.exe
         draft: false
         prerelease: false
         generate_release_notes: true
+        fail_on_unmatched_files: false
         body: |
           ## File to Database Table Converter ${{ steps.get_version.outputs.VERSION }}
 
@@ -78,9 +81,8 @@ jobs:
           - Database connection management
 
           ### Installation
-          1. Download the ZIP file below
-          2. Extract `FileToDBConverter.exe`
-          3. Run the executable - no Python installation required!
+          1. Download `FileToDBConverter.exe` directly OR download the ZIP file below
+          2. Run the executable - no Python installation required!
 
           ### Requirements
           - Windows 10/11
